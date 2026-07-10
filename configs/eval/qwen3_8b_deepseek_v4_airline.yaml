@@ -1,0 +1,31 @@
+domain: airline
+task_split_name: base
+task_ids: null
+num_tasks: 1
+num_trials: 1
+
+agent: llm_agent
+llm_agent: openai/Qwen3-8B
+llm_args_agent:
+  api_base: http://127.0.0.1:8000/v1
+  api_key: EMPTY
+  temperature: 0.0
+  max_tokens: 2048
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: false
+
+user: user_simulator
+llm_user: deepseek/deepseek-v4-flash
+llm_args_user:
+  temperature: 0.0
+
+max_steps: 50
+max_errors: 10
+max_concurrency: 1
+timeout: 600
+seed: 300
+
+save_to: qwen3_8b_deepseek_v4_airline
+verbose_logs: true
+log_level: INFO
