@@ -9,8 +9,8 @@ RL training project for long-horizon tool agents on tau2/tau3-bench.
 - Rollout inference: vLLM
 - User simulator: DeepSeek V4 Flash API through LiteLLM
 - Benchmark/environment: tau2/tau3-bench
-- Algorithm ideas: StraTA, GiGPO, HGPO, PRM-Lite, LATA
-
+- Algorithm ideas: GiGPO, HGPO, GRPO
+                                      
 ## Layout
 
 - `tau2-bench/`: upstream benchmark and simulator.
