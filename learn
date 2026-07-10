@@ -1,0 +1,6 @@
+db.json 数据库
+task.json 任务描述
+toolkit.py 工具装饰器
+airline environment.py 是加载db+policy+tools tools.py具体有哪些工具
+tool.py负责把函数包装成LLM能理解的工具描述
+environment.py airline世界控制台

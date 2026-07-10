@@ -1,0 +1,5 @@
+type: vanilla
+group_size: 4
+temperature: 1.0
+top_p: 0.95
+

@@ -1,0 +1,6 @@
+[submodule "tau2-bench"]
+	path = tau2-bench
+	url = https://github.com/sierra-research/tau2-bench.git
+[submodule "verl"]
+	path = verl
+	url = https://github.com/verl-project/verl.git

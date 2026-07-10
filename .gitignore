@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+experiments/
+outputs/
+checkpoints/
+wandb/
+data/generated/
+*.log
+

@@ -1,0 +1,2 @@
+"""Select diverse candidate strategies."""
+

@@ -1,0 +1,8 @@
+domains:
+  - airline
+  - retail
+  - telecom
+split: base
+max_steps: 30
+user_llm: deepseek/deepseek-v4-flash
+

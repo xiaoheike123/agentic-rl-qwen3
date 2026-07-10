@@ -1,0 +1,6 @@
+type: strata_gigpo
+num_candidate_strategies: 16
+num_selected_strategies: 4
+num_trajectories_per_strategy: 2
+use_self_judgment: true
+

@@ -1,0 +1,4 @@
+# Runtime dependencies will be pinned after environment smoke tests.
+# tau2-bench uses uv and Python 3.12+.
+# verl/vLLM should be installed according to the target CUDA environment.
+

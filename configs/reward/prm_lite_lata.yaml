@@ -1,0 +1,5 @@
+reward_mode: prm_lite_lata
+outcome_weight: 1.0
+process_weight: 0.3
+length_advantage: sqrt
+

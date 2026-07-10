@@ -1,0 +1,9 @@
+domain: telecom
+split: base
+max_steps: 30
+solo_mode: false
+user_llm: deepseek/deepseek-v4-flash
+user_llm_args:
+  temperature: 0.3
+all_messages_as_observation: false
+
