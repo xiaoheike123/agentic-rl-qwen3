@@ -1,0 +1,8 @@
+mode: environment_process
+outcome_weight: 1.0
+process_weight: 0.3
+checks:
+  - tool_execution
+  - state_transition
+  - policy_precondition
+  - explicit_confirmation

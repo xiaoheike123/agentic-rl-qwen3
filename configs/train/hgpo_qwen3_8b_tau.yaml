@@ -1,6 +1,0 @@
-algorithm: hgpo
-model_config: configs/model/qwen3_8b_lora.yaml
-env_config: configs/env/tau_airline.yaml
-rollout_config: configs/rollout/strata.yaml
-reward_config: configs/reward/prm_lite.yaml
-

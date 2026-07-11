@@ -1,0 +1,3 @@
+mode: hindsight_turn
+normalization: per_trajectory
+token_alignment: turn_span

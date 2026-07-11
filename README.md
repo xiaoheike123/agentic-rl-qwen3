@@ -1,6 +1,6 @@
 # Agent RL Qwen3
 
-RL training project for long-horizon tool agents on tau2/tau3-bench.
+RL training for robust long-horizon tool agents on tau2/tau3-bench.
 
 ## Stack
 
@@ -9,15 +9,25 @@ RL training project for long-horizon tool agents on tau2/tau3-bench.
 - Rollout inference: vLLM
 - User simulator: DeepSeek V4 Flash API through LiteLLM
 - Benchmark/environment: tau2/tau3-bench
-- Algorithm ideas: GiGPO, HGPO, GRPO
+- Optimization: GRPO with sequence, token, and balanced aggregation
+- Credit: environment-verifiable process rewards and hindsight turn credit
+- Evaluation: robustness under interaction perturbations
                                       
 ## Layout
 
 - `tau2-bench/`: upstream benchmark and simulator.
-- `verl/`: upstream training framework, to be cloned later if we need source edits.
-- `src/agent_rl/`: project-specific adapters, prompts, rollout logic, rewards, and trainer glue.
+- `verl/`: pinned upstream training framework submodule.
+- `src/agent_rl/`: environment, rollout, reward, credit, training, and robustness code.
 - `configs/`: experiment configuration.
 - `scripts/`: setup, data, serving, training, and evaluation launchers.
 - `docs/`: design notes and experiment plans.
 - `experiments/`: local checkpoints and outputs.
 
+## Research axes
+
+```text
+Algorithm:   E0 base -> E1 sequence -> E2 token -> E3 balanced
+Credit:      E3 -> E4 process reward -> E5 hindsight turn credit
+Systems:     S0 synchronous rollout vs S1 asynchronous rollout
+Robustness:  clean vs paraphrase, information-order, and tool-failure tests
+```

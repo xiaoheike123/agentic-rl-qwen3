@@ -1,5 +1,5 @@
-type: vanilla
+mode: sync
 group_size: 4
 temperature: 1.0
 top_p: 0.95
-
+max_concurrent_episodes: 1

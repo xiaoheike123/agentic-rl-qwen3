@@ -1,0 +1,10 @@
+clean: true
+perturbations:
+  - user_paraphrase
+  - information_order_shift
+  - recoverable_tool_failure
+metrics:
+  - perturbed_success_rate
+  - success_drop
+  - recovery_success_rate
+  - extra_steps_after_perturbation

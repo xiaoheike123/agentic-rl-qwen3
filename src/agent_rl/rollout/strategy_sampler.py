@@ -1,2 +1,0 @@
-"""Sample candidate episode strategies."""
-

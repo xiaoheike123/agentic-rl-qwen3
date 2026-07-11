@@ -1,8 +1,10 @@
-# Reward Design
+# Reward and Credit Design
 
-Initial reward modes:
+Reward generation and credit assignment are separate:
 
-- `binary`: tau outcome reward only
-- `prm_lite`: outcome plus rule-based process reward
-- `prm_lite_lata`: PRM-Lite with length-aware turn advantage
+- Outcome reward uses the official tau2 evaluator.
+- Process reward uses deterministic environment evidence such as tool results,
+  state transitions, policy preconditions, and explicit confirmation.
+- Hindsight credit assigns completed-trajectory evidence to earlier turns.
 
+Reward code must not depend on an LLM judge for the primary training signal.

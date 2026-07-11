@@ -6,6 +6,4 @@ The action prompt should include:
 - Available tool schemas
 - Compressed conversation memory
 - Current observation
-- Optional StraTA strategy
 - Strict output format
-

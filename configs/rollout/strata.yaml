@@ -1,6 +1,0 @@
-type: strata
-num_candidate_strategies: 8
-num_selected_strategies: 2
-num_trajectories_per_strategy: 2
-use_self_judgment: true
-
