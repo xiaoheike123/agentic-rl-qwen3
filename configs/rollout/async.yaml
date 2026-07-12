@@ -1,6 +1,13 @@
 mode: async
-group_size: 4
+group_size: 8
 temperature: 1.0
 top_p: 0.95
 max_concurrent_episodes: 8
-max_policy_version_lag: 1
+freeze_policy_during_collection: true
+batch_barrier: false
+context_compression:
+  max_chars: 24000
+  recent_events: 12
+  max_event_chars: 12000
+  first_user_budget: 8000
+  minimum_event_budget: 256

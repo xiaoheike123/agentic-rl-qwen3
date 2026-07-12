@@ -1,4 +1,5 @@
 """Render tau2 Tool objects into text or tool-call schemas."""
+
 from __future__ import annotations
 
 from copy import deepcopy
@@ -25,20 +26,14 @@ def render_tool_schemas(
             )
 
         if schema.get("type") != "function":
-            raise ToolSchemaError(
-                f"Tool {tool.name!r} is not an OpenAI function tool"
-            )
+            raise ToolSchemaError(f"Tool {tool.name!r} is not an OpenAI function tool")
 
         function_schema = schema.get("function")
         if not isinstance(function_schema, dict):
-            raise ToolSchemaError(
-                f"Tool {tool.name!r} has no function schema"
-            )
+            raise ToolSchemaError(f"Tool {tool.name!r} has no function schema")
 
         if function_schema.get("name") != tool.name:
-            raise ToolSchemaError(
-                f"Tool name mismatch for {tool.name!r}"
-            )
+            raise ToolSchemaError(f"Tool name mismatch for {tool.name!r}")
 
         schemas.append(schema)
 

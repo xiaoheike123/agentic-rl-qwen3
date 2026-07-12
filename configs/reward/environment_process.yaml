@@ -1,8 +1,14 @@
 mode: environment_process
 outcome_weight: 1.0
 process_weight: 0.3
-checks:
-  - tool_execution
-  - state_transition
-  - policy_precondition
-  - explicit_confirmation
+process:
+  tool_success_reward: 0.0
+  invalid_action_penalty: 1.0
+  tool_error_penalty: 1.0
+  missing_result_penalty: 1.0
+  recovery_bonus: 0.5
+  unresolved_error_penalty: 0.5
+  abnormal_truncation_penalty: 1.0
+  repeated_call_diagnostic_after: 2
+  minimum_score: -1.0
+  maximum_score: 1.0

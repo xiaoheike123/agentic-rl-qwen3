@@ -1,3 +1,7 @@
 mode: hindsight_turn
-normalization: per_trajectory
-token_alignment: turn_span
+normalization: mean_one_per_trajectory
+token_alignment: response_loss_mask
+direction: grpo_advantage_sign
+process_alignment_scale: 1.0
+minimum_weight: 0.05
+maximum_weight: 3.0

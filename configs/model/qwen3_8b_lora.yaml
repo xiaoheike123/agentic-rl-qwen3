@@ -3,5 +3,6 @@ training_method: lora
 lora_rank: 32
 lora_alpha: 64
 max_prompt_length: 8192
-max_response_length: 1024
-
+max_response_length: 16384
+gradient_checkpointing: true
+activation_offload: false

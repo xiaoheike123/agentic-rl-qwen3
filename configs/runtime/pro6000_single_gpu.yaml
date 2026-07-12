@@ -1,0 +1,22 @@
+model_path: /root/autodl-tmp/models/Qwen3-8B
+output_root: /root/autodl-tmp/agent-rl-outputs
+dataset_root: /root/autodl-tmp/agent-rl-data
+train_batch_size: 4
+rollout_group_size: 8
+ppo_mini_batch_size: 32
+ppo_micro_batch_size_per_gpu: 1
+total_epochs: 3
+save_freq: 20
+test_freq: 20
+max_actor_ckpt_to_keep: 1
+seed: 42
+n_gpus_per_node: 1
+nnodes: 1
+agent_loop_workers: 8
+gpu_memory_utilization: 0.45
+max_num_batched_tokens: 24576
+max_num_seqs: 16
+logger:
+  - console
+  - wandb
+project_name: agent-rl-qwen3

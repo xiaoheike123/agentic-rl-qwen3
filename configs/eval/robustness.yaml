@@ -1,10 +1,15 @@
-clean: true
-perturbations:
-  - user_paraphrase
-  - information_order_shift
-  - recoverable_tool_failure
-metrics:
-  - perturbed_success_rate
-  - success_drop
-  - recovery_success_rate
-  - extra_steps_after_perturbation
+domain: airline
+manifest: data/robustness/airline_reviewed.jsonl
+output_dir: outputs/robustness/airline
+trials: 1
+seed: 42
+max_steps: 50
+user_llm: deepseek/deepseek-v4-flash
+user_llm_args:
+  temperature: 0.0
+model: Qwen3-8B
+base_url: http://127.0.0.1:8000/v1
+api_key: EMPTY
+temperature: 0.0
+max_tokens: 2048
+enable_thinking: false

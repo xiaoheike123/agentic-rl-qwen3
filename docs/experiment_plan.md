@@ -23,8 +23,12 @@ Algorithm experiments:
 
 System experiments:
 
-- `S0`: E5 with synchronous rollout.
-- `S1`: E5 with bounded-staleness asynchronous rollout.
+- `S0`: Fixed-policy episode collection with a batch barrier.
+- `S1`: Concurrent fixed-policy episode collection with ready-group streaming.
+
+S0 and S1 use the same frozen policy version for every compared batch. Policy
+staleness is deliberately excluded, so this axis measures throughput rather
+than changing the optimization objective.
 
 Robustness evaluation:
 

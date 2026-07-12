@@ -1,2 +1,1 @@
-"""Task loading and dataset generation."""
-
+"""Trajectory schemas and public task-identity dataset builders."""

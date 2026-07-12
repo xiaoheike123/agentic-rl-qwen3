@@ -7,6 +7,7 @@ outputs/
 checkpoints/
 wandb/
 data/generated/
+data/robustness/*.jsonl
 *.log
 # Python package metadata
 *.egg-info/

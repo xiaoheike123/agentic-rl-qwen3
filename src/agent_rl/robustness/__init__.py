@@ -1,1 +1,1 @@
-"""Interaction perturbations and robustness metrics."""
+"""Interaction perturbations and paired robustness metrics."""

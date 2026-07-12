@@ -11,6 +11,12 @@ tau task -> AgentGymEnv -> policy action -> trajectory evidence
          -> GRPO aggregation -> verl update
 ```
 
+Training uses a custom verl `AgentLoop`, so rollout tokens are sampled from the
+same policy version that is updated. The separate OpenAI-compatible
+`VLLMPolicy` is an evaluation adapter and is not the training data source.
+Long episodes use deterministic rolling prompt reconstruction; no persistent
+memory or auxiliary summarization model is involved.
+
 Module boundaries:
 
 - `rewards/` determines where verifiable reward signals come from.

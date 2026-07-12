@@ -1,9 +1,9 @@
 domain: retail
-split: base
+train_split: train
+validation_split: validation
 max_steps: 30
 solo_mode: false
 user_llm: deepseek/deepseek-v4-flash
 user_llm_args:
-  temperature: 0.3
+  temperature: 0.0
 all_messages_as_observation: false
-

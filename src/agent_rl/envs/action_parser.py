@@ -1,4 +1,5 @@
 """Parse model outputs into tau2-compatible actions."""
+
 from __future__ import annotations
 
 import json
@@ -33,14 +34,10 @@ def to_tau_action(
     has_content = content is not None and bool(content.strip())
 
     if has_content and calls:
-        raise ActionFormatError(
-            "A tau2 action cannot contain both text and tool calls"
-        )
+        raise ActionFormatError("A tau2 action cannot contain both text and tool calls")
 
     if len(calls) > 1:
-        raise ActionFormatError(
-            "A tau2 action can contain at most one tool call"
-        )
+        raise ActionFormatError("A tau2 action can contain at most one tool call")
 
     if calls:
         call = calls[0]
@@ -60,6 +57,4 @@ def to_tau_action(
     if has_content:
         return content.strip()
 
-    raise ActionFormatError(
-        "Model output must contain text or one tool call"
-    )
+    raise ActionFormatError("Model output must contain text or one tool call")

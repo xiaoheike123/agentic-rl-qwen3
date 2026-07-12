@@ -5,3 +5,4 @@ algorithm_config: configs/algorithm/grpo_balanced.yaml
 rollout_config: configs/rollout/sync.yaml
 reward_config: configs/reward/environment_process.yaml
 credit_config: configs/credit/hindsight_turn.yaml
+runtime_config: configs/runtime/pro6000_single_gpu.yaml

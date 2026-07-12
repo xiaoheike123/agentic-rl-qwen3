@@ -21,9 +21,7 @@ def load_yaml_config(config_path: Path) -> dict[str, Any]:
         config_data = yaml.safe_load(file)
 
     if not isinstance(config_data, dict):
-        raise ValueError(
-            f"Config must contain a YAML mapping: {config_path}"
-        )
+        raise ValueError(f"Config must contain a YAML mapping: {config_path}")
 
     return config_data
 
@@ -60,4 +58,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

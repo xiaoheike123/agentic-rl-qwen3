@@ -95,9 +95,7 @@ class VLLMPolicy:
                 tool_calls=parsed_tool_calls,
             )
         except ValueError as error:
-            raise PolicyResponseError(
-                f"Invalid policy response: {error}"
-            ) from error
+            raise PolicyResponseError(f"Invalid policy response: {error}") from error
 
         usage = response.usage
 
@@ -117,14 +115,11 @@ class VLLMPolicy:
             arguments = json.loads(tool_call.function.arguments)
         except json.JSONDecodeError as error:
             raise PolicyResponseError(
-                f"Tool arguments are not valid JSON: "
-                f"{tool_call.function.arguments}"
+                f"Tool arguments are not valid JSON: {tool_call.function.arguments}"
             ) from error
 
         if not isinstance(arguments, dict):
-            raise PolicyResponseError(
-                "Tool arguments must decode to a JSON object"
-            )
+            raise PolicyResponseError("Tool arguments must decode to a JSON object")
 
         return ModelToolCall(
             name=tool_call.function.name,
