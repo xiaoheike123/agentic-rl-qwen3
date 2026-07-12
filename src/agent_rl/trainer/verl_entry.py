@@ -192,7 +192,7 @@ def build_verl_command(config: ExperimentConfig) -> list[str]:
             "actor_rollout_ref.rollout.agent.agent_loop_config_path", str(loop_path)
         ),
         _override(
-            "actor_rollout_ref.rollout.agent.agent_loop_manager_class",
+            "+actor_rollout_ref.rollout.agent.agent_loop_manager_class",
             "agent_rl.trainer.tau_agent_loop_manager.TauAgentLoopManager",
         ),
         _override(

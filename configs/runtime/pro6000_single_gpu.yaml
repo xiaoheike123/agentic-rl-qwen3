@@ -18,5 +18,5 @@ max_num_batched_tokens: 24576
 max_num_seqs: 16
 logger:
   - console
-  - wandb
+  - swanlab
 project_name: agent-rl-qwen3
