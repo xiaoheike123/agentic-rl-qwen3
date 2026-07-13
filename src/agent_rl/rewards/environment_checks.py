@@ -54,6 +54,8 @@ def iter_tool_executions(
 ) -> Iterator[ToolExecutionEvidence]:
     for turn in episode.turns:
         for call_index, call in enumerate(turn.tool_calls):
+            if call.is_control:
+                continue
             yield _to_execution_evidence(
                 turn_index=turn.turn_index,
                 call_index=call_index,

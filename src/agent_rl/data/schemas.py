@@ -23,7 +23,7 @@ def utc_now() -> str:
 
 @dataclass(slots=True)
 class ToolCallRecord:
-    """One tool call and the environment result it produced."""
+    """One tool call and the environment or control result it produced."""
 
     call_id: str
     name: str
@@ -32,6 +32,7 @@ class ToolCallRecord:
     error: str | None = None
     result_received: bool = False
     duration_ms: float | None = None
+    is_control: bool = False
 
     def __post_init__(self) -> None:
         if not self.call_id.strip():

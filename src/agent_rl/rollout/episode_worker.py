@@ -15,6 +15,10 @@ from agent_rl.data.schemas import (
     ToolCallRecord,
     TurnRecord,
 )
+from agent_rl.envs.action_parser import (
+    TAU_STOP_TOOL_NAME,
+    is_tau_control_tool,
+)
 from agent_rl.envs.tau_env import TauEnv, TauEnvConfig, TauTransition
 from agent_rl.prompts.action_prompt import build_action_messages
 from agent_rl.prompts.context_compression import (
@@ -130,6 +134,7 @@ def _build_tool_call_records(output: PolicyOutput) -> list[ToolCallRecord]:
                 call_id=call.tool_call_id,
                 name=call.name,
                 arguments=deepcopy(call.arguments),
+                is_control=is_tau_control_tool(call.name),
             )
         )
 
@@ -192,6 +197,7 @@ def _hydrate_tool_results(
     strict: bool,
 ) -> list[str]:
     results = _collect_tool_results(simulation_run)
+    termination_reason = simulation_run.get("termination_reason")
     seen_call_ids: set[str] = set()
     missing_call_ids: list[str] = []
 
@@ -204,6 +210,21 @@ def _hydrate_tool_results(
 
             seen_call_ids.add(call.call_id)
             tool_result = results.get(call.call_id)
+
+            if call.is_control and call.name != TAU_STOP_TOOL_NAME:
+                raise EpisodeDataError(
+                    f"unsupported tau2 control tool {call.name!r}"
+                )
+
+            if (
+                call.is_control
+                and tool_result is None
+                and termination_reason == "agent_stop"
+            ):
+                call.result = {"termination_reason": "agent_stop"}
+                call.error = None
+                call.result_received = True
+                continue
 
             if tool_result is None:
                 missing_call_ids.append(call.call_id)

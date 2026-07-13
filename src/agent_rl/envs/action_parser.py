@@ -7,6 +7,15 @@ from dataclasses import dataclass
 from typing import Any, Sequence
 
 
+TAU_STOP_TOOL_NAME = "done"
+
+
+def is_tau_control_tool(name: str) -> bool:
+    """Return whether GymAgent handles a tool call without the environment."""
+
+    return name == TAU_STOP_TOOL_NAME
+
+
 class ActionFormatError(ValueError):
     """Raised when a model output cannot become one valid tau2 action."""
 

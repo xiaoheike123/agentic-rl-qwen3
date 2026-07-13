@@ -18,7 +18,11 @@ from agent_rl.data.schemas import (
     TurnRecord,
 )
 from agent_rl.data.synthetic.training_db import load_training_database
-from agent_rl.envs.action_parser import ModelToolCall, to_tau_action
+from agent_rl.envs.action_parser import (
+    ModelToolCall,
+    is_tau_control_tool,
+    to_tau_action,
+)
 from agent_rl.envs.tau_env import (
     TauEnv,
     TauEnvConfig,
@@ -316,6 +320,7 @@ class TauAgentLoop(AgentLoopBase):
                     call_id=call.tool_call_id,
                     name=call.name,
                     arguments=dict(call.arguments),
+                    is_control=is_tau_control_tool(call.name),
                 )
                 for call in model_calls
             ]
