@@ -11,6 +11,7 @@ from pathlib import Path
 
 from agent_rl.data.synthetic.fingerprint import semantic_fingerprint
 from agent_rl.data.synthetic.generators import GENERATORS
+from agent_rl.data.synthetic.generators.common import GENERATOR_VERSION
 from agent_rl.data.synthetic.overlap import BenchmarkOverlapGuard
 from agent_rl.data.synthetic.schema import (
     SUPPORTED_DOMAINS,
@@ -69,6 +70,7 @@ def validate_corpus_manifest(config: SyntheticBuildConfig) -> None:
         manifest = json.load(stream)
     actual = manifest.get("config") or {}
     expected = {
+        "generator_version": GENERATOR_VERSION,
         "domains": list(config.domains),
         "seed": config.seed,
         "validation_fraction": config.validation_fraction,
@@ -232,6 +234,7 @@ def build_synthetic_corpus(config: SyntheticBuildConfig) -> SyntheticBuildReport
         json.dump(
             {
                 "config": {
+                    "generator_version": GENERATOR_VERSION,
                     **asdict(config),
                     "output_root": str(config.output_root),
                 },

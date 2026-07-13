@@ -9,6 +9,7 @@ from tau2.domains.airline.utils import AIRLINE_DB_PATH
 
 from agent_rl.data.synthetic.generators.common import (
     GeneratedCandidate,
+    OracleActionSpec,
     make_candidate,
 )
 
@@ -47,8 +48,12 @@ def generate_airline_candidates(seed: int) -> list[GeneratedCandidate]:
                     "details when requested and explicitly confirm the cancellation "
                     "after the agent explains it. Do not request any other change."
                 ),
-                action_name="cancel_reservation",
-                action_arguments={"reservation_id": reservation.reservation_id},
+                actions=(
+                    OracleActionSpec(
+                        name="cancel_reservation",
+                        arguments={"reservation_id": reservation.reservation_id},
+                    ),
+                ),
                 communicate_info=[reservation.reservation_id, "cancelled"],
                 purpose="Cancel one existing reservation after normal confirmation.",
             )
@@ -77,13 +82,17 @@ def generate_airline_candidates(seed: int) -> list[GeneratedCandidate]:
                         f"non-free bags at {reservation.nonfree_baggages}. Confirm the "
                         "change if asked and do not modify flights or passengers."
                     ),
-                    action_name="update_reservation_baggages",
-                    action_arguments={
-                        "reservation_id": reservation.reservation_id,
-                        "total_baggages": new_total,
-                        "nonfree_baggages": reservation.nonfree_baggages,
-                        "payment_id": payment_ids[0],
-                    },
+                    actions=(
+                        OracleActionSpec(
+                            name="update_reservation_baggages",
+                            arguments={
+                                "reservation_id": reservation.reservation_id,
+                                "total_baggages": new_total,
+                                "nonfree_baggages": reservation.nonfree_baggages,
+                                "payment_id": payment_ids[0],
+                            },
+                        ),
+                    ),
                     communicate_info=[reservation.reservation_id, "baggage"],
                     purpose="Update baggage quantity on an existing reservation.",
                 )

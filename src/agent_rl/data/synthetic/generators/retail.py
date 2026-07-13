@@ -9,6 +9,7 @@ from tau2.domains.retail.utils import RETAIL_DB_PATH
 
 from agent_rl.data.synthetic.generators.common import (
     GeneratedCandidate,
+    OracleActionSpec,
     make_candidate,
 )
 
@@ -55,8 +56,12 @@ def generate_retail_candidates(seed: int) -> list[GeneratedCandidate]:
                     f"Explain that the order was {reason}, request cancellation, "
                     "and explicitly confirm after the agent explains the refund."
                 ),
-                action_name="cancel_pending_order",
-                action_arguments={"order_id": order.order_id, "reason": reason},
+                actions=(
+                    OracleActionSpec(
+                        name="cancel_pending_order",
+                        arguments={"order_id": order.order_id, "reason": reason},
+                    ),
+                ),
                 communicate_info=[order.order_id, "cancelled"],
                 purpose="Cancel a pending retail order with a valid reason.",
             )
@@ -75,8 +80,12 @@ def generate_retail_candidates(seed: int) -> list[GeneratedCandidate]:
                     "Request only the shipping-address change and explicitly confirm "
                     "after the agent repeats the new address."
                 ),
-                action_name="modify_pending_order_address",
-                action_arguments={"order_id": order.order_id, **new_address},
+                actions=(
+                    OracleActionSpec(
+                        name="modify_pending_order_address",
+                        arguments={"order_id": order.order_id, **new_address},
+                    ),
+                ),
                 communicate_info=[order.order_id, new_address["zip"]],
                 purpose="Modify the shipping address of a pending order.",
             )
@@ -99,8 +108,12 @@ def generate_retail_candidates(seed: int) -> list[GeneratedCandidate]:
                     "Request the account-level address update, not an individual order "
                     "change, and explicitly confirm after the agent repeats it."
                 ),
-                action_name="modify_user_address",
-                action_arguments={"user_id": user.user_id, **new_address},
+                actions=(
+                    OracleActionSpec(
+                        name="modify_user_address",
+                        arguments={"user_id": user.user_id, **new_address},
+                    ),
+                ),
                 communicate_info=[user.user_id, new_address["zip"]],
                 purpose="Update a customer's default retail address.",
             )

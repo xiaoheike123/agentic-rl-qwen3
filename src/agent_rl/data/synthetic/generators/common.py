@@ -20,7 +20,21 @@ from tau2.data_model.tasks import (
 from agent_rl.data.synthetic.schema import GenerationMetadata
 
 
-GENERATOR_VERSION = "1.0.0"
+GENERATOR_VERSION = "2.0.0"
+
+
+@dataclass(frozen=True, slots=True)
+class OracleActionSpec:
+    """One ordered, environment-executable action in a synthetic task target."""
+
+    name: str
+    arguments: dict[str, Any]
+
+    def __post_init__(self) -> None:
+        if not self.name.strip():
+            raise ValueError("Oracle action name must not be empty")
+        if not isinstance(self.arguments, dict):
+            raise TypeError("Oracle action arguments must be a dictionary")
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,19 +53,23 @@ def make_candidate(
     reason_for_call: str,
     known_info: str,
     task_instructions: str,
-    action_name: str,
-    action_arguments: dict[str, Any],
+    actions: tuple[OracleActionSpec, ...],
     communicate_info: list[str],
     purpose: str,
 ) -> GeneratedCandidate:
+    if not actions:
+        raise ValueError("A synthetic task requires at least one Oracle action")
+
     identity = json.dumps(
         {
             "domain": domain,
             "template": template,
             "seed": seed,
             "entities": entities,
-            "action": action_name,
-            "arguments": action_arguments,
+            "actions": [
+                {"name": action.name, "arguments": action.arguments}
+                for action in actions
+            ],
         },
         sort_keys=True,
         separators=(",", ":"),
@@ -80,11 +98,12 @@ def make_candidate(
         evaluation_criteria=EvaluationCriteria(
             actions=[
                 Action(
-                    action_id=f"oracle_{action_name}_0",
+                    action_id=f"oracle_{action.name}_{index}",
                     requestor="assistant",
-                    name=action_name,
-                    arguments=action_arguments,
+                    name=action.name,
+                    arguments=action.arguments,
                 )
+                for index, action in enumerate(actions)
             ],
             communicate_info=communicate_info,
             reward_basis=[RewardType.DB, RewardType.COMMUNICATE],

@@ -9,7 +9,10 @@ from agent_rl.data.synthetic.audit import (
     audit_synthetic_corpus,
 )
 from agent_rl.data.synthetic.fingerprint import semantic_fingerprint
-from agent_rl.data.synthetic.generators.common import make_candidate
+from agent_rl.data.synthetic.generators.common import (
+    OracleActionSpec,
+    make_candidate,
+)
 from agent_rl.data.synthetic.schema import (
     OverlapMetadata,
     SyntheticSplit,
@@ -34,8 +37,12 @@ def _record(
         reason_for_call=f"Handle reservation {index}.",
         known_info=f"The reservation is reservation-{index}.",
         task_instructions=f"Request operation {index} and confirm it.",
-        action_name="cancel_reservation",
-        action_arguments={"reservation_id": f"reservation-{index}"},
+        actions=(
+            OracleActionSpec(
+                name="cancel_reservation",
+                arguments={"reservation_id": f"reservation-{index}"},
+            ),
+        ),
         communicate_info=[f"reservation-{index}", "cancelled"],
         purpose="Test one synthetic audit record.",
     )

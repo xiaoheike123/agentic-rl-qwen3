@@ -9,6 +9,7 @@ from tau2.domains.telecom.utils import TELECOM_DB_PATH
 
 from agent_rl.data.synthetic.generators.common import (
     GeneratedCandidate,
+    OracleActionSpec,
     make_candidate,
 )
 
@@ -54,11 +55,15 @@ def generate_telecom_candidates(seed: int) -> list[GeneratedCandidate]:
                     "Request only the roaming setting change. Complete any identity "
                     "verification and confirm the requested change if asked."
                 ),
-                action_name=roaming_action,
-                action_arguments={
-                    "customer_id": customer.customer_id,
-                    "line_id": line.line_id,
-                },
+                actions=(
+                    OracleActionSpec(
+                        name=roaming_action,
+                        arguments={
+                            "customer_id": customer.customer_id,
+                            "line_id": line.line_id,
+                        },
+                    ),
+                ),
                 communicate_info=[line.line_id, roaming_word],
                 purpose="Change the international roaming setting on one line.",
             )
@@ -83,12 +88,16 @@ def generate_telecom_candidates(seed: int) -> list[GeneratedCandidate]:
                         f"Request exactly {amount:g} GB of additional data. Complete "
                         "identity checks and explicitly approve the quoted charge."
                     ),
-                    action_name="refuel_data",
-                    action_arguments={
-                        "customer_id": customer.customer_id,
-                        "line_id": line.line_id,
-                        "gb_amount": amount,
-                    },
+                    actions=(
+                        OracleActionSpec(
+                            name="refuel_data",
+                            arguments={
+                                "customer_id": customer.customer_id,
+                                "line_id": line.line_id,
+                                "gb_amount": amount,
+                            },
+                        ),
+                    ),
                     communicate_info=[line.line_id, f"{amount:g} GB"],
                     purpose="Purchase a precise amount of additional mobile data.",
                 )
@@ -125,8 +134,12 @@ def generate_telecom_candidates(seed: int) -> list[GeneratedCandidate]:
                     "Request only this line-status change. Complete identity checks and "
                     "explicitly confirm after the agent explains the consequences."
                 ),
-                action_name=status_action,
-                action_arguments=status_arguments,
+                actions=(
+                    OracleActionSpec(
+                        name=status_action,
+                        arguments=status_arguments,
+                    ),
+                ),
                 communicate_info=[line.line_id, status_word],
                 purpose="Change the service status of one telecom line.",
             )
