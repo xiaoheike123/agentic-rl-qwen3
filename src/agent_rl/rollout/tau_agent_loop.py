@@ -363,7 +363,7 @@ class TauAgentLoop(AgentLoopBase):
     ) -> tuple[float, list[float]]:
         if transition.done:
             simulation_run = _decode_json_object(
-                transition.info.get("simulation_run"),
+                transition.evaluator_info.get("simulation_run"),
                 field_name="simulation_run",
             )
             _hydrate_tool_results(episode, simulation_run, strict=True)

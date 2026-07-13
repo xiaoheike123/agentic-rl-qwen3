@@ -14,6 +14,40 @@ from tau2.utils.tools import parse_action_string
 TaskTransform = Callable[[Any], Any]
 EnvironmentTransform = Callable[[Any], Any]
 
+# Keep this as an allowlist: new upstream tau2 info fields stay private until
+# they are reviewed explicitly. In particular, ``task`` contains evaluator
+# criteria and oracle actions and must never cross the policy-facing boundary.
+PUBLIC_TAU_INFO_KEYS = frozenset({"policy", "tools"})
+EVALUATOR_TAU_INFO_KEYS = frozenset({"simulation_run", "reward_info"})
+
+
+def public_tau_info(
+    info: dict[str, Any],
+    *,
+    domain: str,
+    task_id: str,
+) -> dict[str, Any]:
+    """Return only information that policy-side rollout code may consume."""
+
+    public = {
+        key: value
+        for key, value in info.items()
+        if key in PUBLIC_TAU_INFO_KEYS
+    }
+    public["domain"] = domain
+    public["task_id"] = task_id
+    return public
+
+
+def evaluator_tau_info(info: dict[str, Any]) -> dict[str, Any]:
+    """Return runtime evidence reserved for reward and trajectory finalization."""
+
+    return {
+        key: value
+        for key, value in info.items()
+        if key in EVALUATOR_TAU_INFO_KEYS
+    }
+
 
 class _TransformableAgentGymEnv(AgentGymEnv):
     """AgentGymEnv extension point used only by robustness evaluation."""
@@ -111,6 +145,7 @@ class TauReset:
 
     observation: str
     info: dict[str, Any]
+    evaluator_info: dict[str, Any]
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,6 +157,7 @@ class TauTransition:
     terminated: bool
     truncated: bool
     info: dict[str, Any]
+    evaluator_info: dict[str, Any]
 
     @property
     def done(self) -> bool:
@@ -153,6 +189,7 @@ class TauEnv:
         self._done = False
         self._action_count = 0
         self._last_info: dict[str, Any] = {}
+        self._last_evaluator_info: dict[str, Any] = {}
 
     @property
     def has_reset(self) -> bool:
@@ -170,6 +207,10 @@ class TauEnv:
     def last_info(self) -> dict[str, Any]:
         return self._last_info
 
+    @property
+    def last_evaluator_info(self) -> dict[str, Any]:
+        return self._last_evaluator_info
+
     def reset(self, seed: int | None = None) -> TauReset:
         observation, info = self._env.reset(seed=seed)
 
@@ -180,14 +221,23 @@ class TauEnv:
                 f"tau2 reset info must be a dictionary, got {type(info).__name__}"
             )
 
+        evaluator_info = evaluator_tau_info(info)
+        info = public_tau_info(
+            info,
+            domain=self.config.domain,
+            task_id=self.config.task_id,
+        )
+
         self._has_reset = True
         self._done = False
         self._action_count = 0
         self._last_info = info
+        self._last_evaluator_info = evaluator_info
 
         return TauReset(
             observation=observation,
             info=info,
+            evaluator_info=evaluator_info,
         )
 
     def step(self, action: str) -> TauTransition:
@@ -229,13 +279,19 @@ class TauEnv:
                 f"tau2 step info must be a dictionary, got {type(info).__name__}"
             )
 
-        info = dict(info)
+        evaluator_info = evaluator_tau_info(info)
+        info = public_tau_info(
+            info,
+            domain=self.config.domain,
+            task_id=self.config.task_id,
+        )
         info["agent_rl_action_parse_valid"] = action_parse_valid
         info["agent_rl_action_parse_error"] = action_parse_error
 
         self._action_count += 1
         self._done = terminated or truncated
         self._last_info = info
+        self._last_evaluator_info = evaluator_info
 
         return TauTransition(
             observation=observation,
@@ -243,6 +299,7 @@ class TauEnv:
             terminated=terminated,
             truncated=truncated,
             info=info,
+            evaluator_info=evaluator_info,
         )
 
     @staticmethod

@@ -222,7 +222,7 @@ def _hydrate_tool_results(
 
 def _build_reward_record(transition: TauTransition) -> RewardRecord:
     reward_info = _decode_json_object(
-        transition.info.get("reward_info"),
+        transition.evaluator_info.get("reward_info"),
         field_name="reward_info",
     )
 
@@ -376,7 +376,9 @@ class EpisodeWorker:
 
         tool_schemas = render_tool_schemas(tools)
 
-        episode.metadata["task"] = deepcopy(reset.info.get("task"))
+        episode.metadata["task_source"] = (
+            "synthetic" if spec.env_config.task_data is not None else "official"
+        )
         episode.metadata["domain_policy"] = domain_policy
         episode.metadata["tool_schemas"] = deepcopy(tool_schemas)
         episode.metadata["all_messages_as_observation"] = (
@@ -451,7 +453,7 @@ class EpisodeWorker:
         transition: TauTransition,
     ) -> None:
         simulation_run = _decode_json_object(
-            transition.info.get("simulation_run"),
+            transition.evaluator_info.get("simulation_run"),
             field_name="simulation_run",
         )
 
