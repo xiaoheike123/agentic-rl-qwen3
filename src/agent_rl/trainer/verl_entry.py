@@ -29,6 +29,19 @@ def _override(name: str, value: Any) -> str:
     return f"{name}={_stringify(value)}"
 
 
+def _rollout_parallelism(config: ExperimentConfig) -> tuple[int, int]:
+    max_concurrent = int(config.rollout.get("max_concurrent_episodes", 8))
+    requested_workers = int(config.runtime.get("agent_loop_workers", 8))
+    if max_concurrent <= 0:
+        raise ValueError("rollout.max_concurrent_episodes must be positive")
+    if requested_workers <= 0:
+        raise ValueError("runtime.agent_loop_workers must be positive")
+
+    workers = min(requested_workers, max_concurrent)
+    episodes_per_worker = max(1, max_concurrent // workers)
+    return workers, episodes_per_worker
+
+
 def _prepare_files(config: ExperimentConfig) -> tuple[Path, Path, Path]:
     from agent_rl.data.build_dataset import (
         build_official_eval_dataset,
@@ -136,6 +149,7 @@ def _prepare_files(config: ExperimentConfig) -> tuple[Path, Path, Path]:
     run_dir = output_root / config.experiment.lower()
     run_dir.mkdir(parents=True, exist_ok=True)
     loop_path = run_dir / "tau_agent_loop.yaml"
+    _, episodes_per_worker = _rollout_parallelism(config)
     loop_config = [
         {
             "name": "tau_agent",
@@ -172,6 +186,13 @@ def _prepare_files(config: ExperimentConfig) -> tuple[Path, Path, Path]:
                     )
                 ),
                 "max_action_tokens": 2_048,
+                "max_episode_attempts": int(
+                    config.rollout.get("max_episode_attempts", 3)
+                ),
+                "retry_backoff_seconds": float(
+                    config.rollout.get("retry_backoff_seconds", 1.0)
+                ),
+                "max_concurrent_episodes_per_worker": episodes_per_worker,
                 "training_database_root": str(
                     runtime.get(
                         "training_database_root",
@@ -203,6 +224,7 @@ def build_verl_command(config: ExperimentConfig) -> list[str]:
     response_length = int(model["max_response_length"])
     prompt_length = int(model["max_prompt_length"])
     logger = runtime.get("logger", ["console"])
+    agent_loop_workers, _ = _rollout_parallelism(config)
     command = [
         sys.executable,
         "-m",
@@ -289,7 +311,8 @@ def build_verl_command(config: ExperimentConfig) -> list[str]:
             "agent_rl.trainer.tau_agent_loop_manager.TauAgentLoopManager",
         ),
         _override(
-            "actor_rollout_ref.rollout.agent.num_workers", runtime["agent_loop_workers"]
+            "actor_rollout_ref.rollout.agent.num_workers",
+            agent_loop_workers,
         ),
         _override(
             "trainer.project_name", runtime.get("project_name", "agent-rl-qwen3")

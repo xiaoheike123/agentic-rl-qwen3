@@ -14,3 +14,6 @@
     hindsight_config: null
     context_max_chars: 24000
     max_action_tokens: 2048
+    max_episode_attempts: 3
+    retry_backoff_seconds: 1.0
+    max_concurrent_episodes_per_worker: 1

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -20,6 +21,40 @@ EnvironmentTransform = Callable[[Any], Any]
 # criteria and oracle actions and must never cross the policy-facing boundary.
 PUBLIC_TAU_INFO_KEYS = frozenset({"policy", "tools"})
 EVALUATOR_TAU_INFO_KEYS = frozenset({"simulation_run", "reward_info"})
+
+
+class TauInfrastructureError(RuntimeError):
+    """Raised when tau2 cannot produce a valid episode state."""
+
+    def __init__(
+        self,
+        *,
+        stage: str,
+        domain: str,
+        task_id: str,
+    ) -> None:
+        self.stage = stage
+        self.domain = domain
+        self.task_id = task_id
+        super().__init__(
+            "tau2 infrastructure failure during "
+            f"{stage} (domain={domain!r}, task_id={task_id!r})"
+        )
+
+
+def _has_simulation_run(evaluator_info: dict[str, Any]) -> bool:
+    value = evaluator_info.get("simulation_run")
+
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError:
+            return False
+
+    if hasattr(value, "model_dump"):
+        value = value.model_dump()
+
+    return isinstance(value, dict) and bool(value)
 
 
 def public_tau_info(
@@ -242,6 +277,12 @@ class TauEnv:
             )
 
         evaluator_info = evaluator_tau_info(info)
+        if not observation.strip():
+            raise TauInfrastructureError(
+                stage="reset",
+                domain=self.config.domain,
+                task_id=self.config.task_id,
+            )
         info = public_tau_info(
             info,
             domain=self.config.domain,
@@ -301,6 +342,19 @@ class TauEnv:
             )
 
         evaluator_info = evaluator_tau_info(info)
+        done = terminated or truncated
+        if not done and not observation.strip():
+            raise TauInfrastructureError(
+                stage="step_observation",
+                domain=self.config.domain,
+                task_id=self.config.task_id,
+            )
+        if done and not _has_simulation_run(evaluator_info):
+            raise TauInfrastructureError(
+                stage="step_termination",
+                domain=self.config.domain,
+                task_id=self.config.task_id,
+            )
         info = public_tau_info(
             info,
             domain=self.config.domain,

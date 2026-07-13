@@ -8,6 +8,7 @@ from .action_parser import (
 from .tau_env import (
     TauEnv,
     TauEnvConfig,
+    TauInfrastructureError,
     TauReset,
     TauTransition,
 )
@@ -17,6 +18,7 @@ __all__ = [
     "ModelToolCall",
     "TauEnv",
     "TauEnvConfig",
+    "TauInfrastructureError",
     "TauReset",
     "TauTransition",
     "to_tau_action",

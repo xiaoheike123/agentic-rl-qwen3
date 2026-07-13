@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -17,7 +19,11 @@ from agent_rl.data.schemas import (
 )
 from agent_rl.data.synthetic.training_db import load_training_database
 from agent_rl.envs.action_parser import ModelToolCall, to_tau_action
-from agent_rl.envs.tau_env import TauEnv, TauEnvConfig
+from agent_rl.envs.tau_env import (
+    TauEnv,
+    TauEnvConfig,
+    TauInfrastructureError,
+)
 from agent_rl.prompts.action_prompt import (
     OBSERVATION_PROMPT,
     build_action_messages,
@@ -46,6 +52,28 @@ from verl.experimental.agent_loop.agent_loop import (
 from verl.experimental.agent_loop.tool_parser import ToolParser
 
 
+logger = logging.getLogger(__name__)
+
+_worker_episode_semaphore: asyncio.Semaphore | None = None
+_worker_episode_limit: int | None = None
+
+
+def _get_worker_episode_semaphore(limit: int) -> asyncio.Semaphore:
+    global _worker_episode_limit, _worker_episode_semaphore
+
+    if limit <= 0:
+        raise ValueError("max_concurrent_episodes_per_worker must be positive")
+    if _worker_episode_semaphore is None:
+        _worker_episode_limit = limit
+        _worker_episode_semaphore = asyncio.Semaphore(limit)
+    elif _worker_episode_limit != limit:
+        raise RuntimeError(
+            "all TauAgentLoop instances in one worker must use the same "
+            "max_concurrent_episodes_per_worker"
+        )
+    return _worker_episode_semaphore
+
+
 @dataclass(frozen=True, slots=True)
 class TauAgentLoopSettings:
     max_steps: int = 30
@@ -61,6 +89,19 @@ class TauAgentLoopSettings:
     context_max_chars: int = 24_000
     max_action_tokens: int = 2_048
     training_database_root: str | None = None
+    max_episode_attempts: int = 3
+    retry_backoff_seconds: float = 1.0
+    max_concurrent_episodes_per_worker: int = 1
+
+    def __post_init__(self) -> None:
+        if self.max_episode_attempts <= 0:
+            raise ValueError("max_episode_attempts must be positive")
+        if self.retry_backoff_seconds < 0:
+            raise ValueError("retry_backoff_seconds must not be negative")
+        if self.max_concurrent_episodes_per_worker <= 0:
+            raise ValueError(
+                "max_concurrent_episodes_per_worker must be positive"
+            )
 
 
 class TauAgentLoop(AgentLoopBase):
@@ -89,6 +130,45 @@ class TauAgentLoop(AgentLoopBase):
         )
 
     async def run(
+        self, sampling_params: dict[str, Any], **kwargs: Any
+    ) -> AgentLoopOutput:
+        semaphore = _get_worker_episode_semaphore(
+            self.settings.max_concurrent_episodes_per_worker
+        )
+        async with semaphore:
+            for attempt in range(1, self.settings.max_episode_attempts + 1):
+                try:
+                    return await self._run_episode(sampling_params, **kwargs)
+                except TauInfrastructureError as error:
+                    if attempt >= self.settings.max_episode_attempts:
+                        logger.error(
+                            "tau2 episode exhausted infrastructure retries: "
+                            "domain=%s task_id=%s stage=%s attempts=%d",
+                            error.domain,
+                            error.task_id,
+                            error.stage,
+                            attempt,
+                        )
+                        raise
+                    delay = self.settings.retry_backoff_seconds * (
+                        2 ** (attempt - 1)
+                    )
+                    logger.warning(
+                        "retrying tau2 episode after infrastructure failure: "
+                        "domain=%s task_id=%s stage=%s attempt=%d/%d delay=%.1fs",
+                        error.domain,
+                        error.task_id,
+                        error.stage,
+                        attempt,
+                        self.settings.max_episode_attempts,
+                        delay,
+                    )
+                    if delay:
+                        await asyncio.sleep(delay)
+
+        raise RuntimeError("tau2 retry loop exited without an episode result")
+
+    async def _run_episode(
         self, sampling_params: dict[str, Any], **kwargs: Any
     ) -> AgentLoopOutput:
         domain = _required_string(kwargs, "domain")

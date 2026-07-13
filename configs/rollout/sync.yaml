@@ -3,6 +3,8 @@ group_size: 8
 temperature: 1.0
 top_p: 0.95
 max_concurrent_episodes: 8
+max_episode_attempts: 3
+retry_backoff_seconds: 1.0
 freeze_policy_during_collection: true
 batch_barrier: true
 context_compression:
