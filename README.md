@@ -26,13 +26,18 @@ RL training for robust long-horizon tool agents on tau2/tau3-bench.
 ## Training path
 
 ```text
-public tau2 task ID
+verified synthetic airline / retail / telecom Task
+-> official-base overlap guard
+-> domain-balanced verl dataset
 -> verl TauAgentLoop
 -> current Qwen3 policy served by verl/vLLM
 -> tau2 AgentGymEnv + DeepSeek user simulator
 -> official outcome and optional verifiable process reward
 -> GRPO update
 ```
+
+Public tau2 `base` tasks are evaluation-only and are never written to E1-E5
+training datasets. See `docs/data_pipeline.md` for generation and audit rules.
 
 The standalone vLLM server on port 8000 is used for independent evaluation.
 Training starts and synchronizes its own vLLM rollout engine through verl.

@@ -1,7 +1,7 @@
 experiment: E0
 evaluation_only: true
 model_config: configs/model/qwen3_8b_full.yaml
-env_config: configs/env/tau_airline.yaml
+env_config: configs/env/tau_all.yaml
 algorithm_config: configs/algorithm/grpo_sequence.yaml
 rollout_config: configs/rollout/sync.yaml
 reward_config: configs/reward/outcome.yaml

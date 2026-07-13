@@ -6,6 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from tau2.data_model.tasks import Task
 from tau2.gym.gym_agent import AgentGymEnv
 from tau2.utils.tools import parse_action_string
 
@@ -22,16 +23,22 @@ class _TransformableAgentGymEnv(AgentGymEnv):
         *args: Any,
         task_transform: TaskTransform | None = None,
         environment_transform: EnvironmentTransform | None = None,
+        task_override: Task | None = None,
         **kwargs: Any,
     ) -> None:
         self._task_transform = task_transform
         self._environment_transform = environment_transform
+        self._task_override = deepcopy(task_override)
         self._transformed_task: Any = None
         super().__init__(*args, **kwargs)
 
     def _get_task(self) -> Any:
         if self._transformed_task is None:
-            task = super()._get_task()
+            task = (
+                deepcopy(self._task_override)
+                if self._task_override is not None
+                else super()._get_task()
+            )
             self._transformed_task = (
                 self._task_transform(deepcopy(task))
                 if self._task_transform is not None
@@ -60,6 +67,7 @@ class TauEnvConfig:
     task_transform: TaskTransform | None = None
     environment_transform: EnvironmentTransform | None = None
     perturbation_name: str | None = None
+    task_data: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         if not self.domain.strip():
@@ -87,6 +95,14 @@ class TauEnvConfig:
 
         if self.perturbation_name is not None and not self.perturbation_name.strip():
             raise ValueError("perturbation_name must not be blank")
+
+        if self.task_data is not None:
+            task = Task.model_validate(self.task_data)
+            if task.id != self.task_id:
+                raise ValueError(
+                    "task_data.id must match the configured task_id: "
+                    f"{task.id!r} != {self.task_id!r}"
+                )
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,6 +143,11 @@ class TauEnv:
             all_messages_as_observation=config.all_messages_as_observation,
             task_transform=config.task_transform,
             environment_transform=config.environment_transform,
+            task_override=(
+                Task.model_validate(config.task_data)
+                if config.task_data is not None
+                else None
+            ),
         )
         self._has_reset = False
         self._done = False

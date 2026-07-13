@@ -30,28 +30,77 @@ def _override(name: str, value: Any) -> str:
 
 
 def _prepare_files(config: ExperimentConfig) -> tuple[Path, Path, Path]:
-    from agent_rl.data.build_dataset import build_tau_dataset
+    from agent_rl.data.build_dataset import (
+        build_official_eval_dataset,
+    )
+    from agent_rl.data.synthetic.builder import (
+        SyntheticBuildConfig,
+        build_synthetic_corpus,
+        validate_corpus_manifest,
+    )
+    from agent_rl.data.synthetic.sampler import build_balanced_verl_dataset
+    from agent_rl.data.synthetic.schema import SyntheticSplit
 
     runtime = config.runtime
     dataset_root = Path(
         os.environ.get("AGENT_RL_DATASET_ROOT", runtime["dataset_root"])
     )
     output_root = Path(os.environ.get("AGENT_RL_OUTPUT_ROOT", runtime["output_root"]))
-    domain = config.environment["domain"]
-    train_path = dataset_root / domain / "train.jsonl"
-    validation_path = dataset_root / domain / "validation.jsonl"
-    build_tau_dataset(
-        train_path,
-        domain=domain,
-        split=config.environment.get("train_split", "train"),
-        seed=int(runtime.get("seed", 42)),
-    )
-    build_tau_dataset(
-        validation_path,
-        domain=domain,
-        split=config.environment.get("validation_split", "validation"),
-        seed=int(runtime.get("seed", 42)) + 100_000,
-    )
+    domains = tuple(config.environment.get("domains") or ())
+    if not domains:
+        domain = config.environment.get("domain")
+        if not isinstance(domain, str) or not domain.strip():
+            raise ValueError("environment config requires domain or domains")
+        domains = (domain,)
+
+    seed = int(runtime.get("seed", 42))
+    if bool(config.raw.get("evaluation_only", False)):
+        eval_root = dataset_root / "official_eval"
+        validation_path = eval_root / "base.jsonl"
+        build_official_eval_dataset(
+            validation_path,
+            domains=domains,
+            split="base",
+            seed=seed,
+        )
+        train_path = validation_path
+    else:
+        if set(domains) != {"airline", "retail", "telecom"}:
+            raise ValueError(
+                "formal synthetic training requires airline, retail, and telecom"
+            )
+        corpus_root = Path(
+            os.environ.get(
+                "AGENT_RL_SYNTHETIC_ROOT",
+                runtime.get("synthetic_corpus_root", dataset_root / "synthetic"),
+            )
+        )
+        build_config = SyntheticBuildConfig(
+            output_root=corpus_root,
+            seed=seed,
+            max_per_split_per_domain=int(
+                runtime.get("synthetic_max_per_split_per_domain", 128)
+            )
+        )
+        if not (corpus_root / "manifest.json").is_file():
+            build_synthetic_corpus(build_config)
+        else:
+            validate_corpus_manifest(build_config)
+        balanced_root = dataset_root / "balanced"
+        train_path = balanced_root / "train.jsonl"
+        validation_path = balanced_root / "validation.jsonl"
+        build_balanced_verl_dataset(
+            train_path,
+            corpus_root=corpus_root,
+            split=SyntheticSplit.TRAIN,
+            seed=seed,
+        )
+        build_balanced_verl_dataset(
+            validation_path,
+            corpus_root=corpus_root,
+            split=SyntheticSplit.VALIDATION,
+            seed=seed + 100_000,
+        )
 
     run_dir = output_root / config.experiment.lower()
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -172,7 +221,14 @@ def build_verl_command(config: ExperimentConfig) -> list[str]:
         _override("actor_rollout_ref.rollout.name", "vllm"),
         _override("actor_rollout_ref.rollout.mode", "async"),
         _override("actor_rollout_ref.rollout.tensor_model_parallel_size", 1),
-        _override("actor_rollout_ref.rollout.n", runtime["rollout_group_size"]),
+        _override(
+            "actor_rollout_ref.rollout.n",
+            (
+                runtime.get("evaluation_trials", 4)
+                if bool(config.raw.get("evaluation_only", False))
+                else runtime["rollout_group_size"]
+            ),
+        ),
         _override(
             "actor_rollout_ref.rollout.temperature",
             config.rollout.get("temperature", 1.0),

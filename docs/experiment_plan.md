@@ -3,14 +3,19 @@
 Build order:
 
 1. Define the trajectory schema and JSONL persistence.
-2. Implement one synchronous episode worker and batch collector.
-3. Run E0 base-model evaluation.
-4. Integrate verl and run E1 vanilla GRPO with sequence aggregation.
-5. Compare E2 token and E3 balanced aggregation under identical settings.
-6. Add environment-verifiable process rewards for E4.
-7. Add hindsight turn-level credit assignment for E5.
-8. Compare synchronous and asynchronous rollout throughput as S0/S1.
-9. Evaluate E0, E3, and E5 under interaction perturbations.
+2. Build and audit three-domain synthetic train/validation data.
+3. Implement one synchronous episode worker and batch collector.
+4. Freeze the official `base` evaluation protocol and record E0 once.
+5. Integrate verl and run E1 vanilla GRPO with sequence aggregation.
+6. Compare E2 token and E3 balanced aggregation under identical settings.
+7. Add environment-verifiable process rewards for E4.
+8. Add hindsight turn-level credit assignment for E5.
+9. Compare synchronous and asynchronous rollout throughput as S0/S1.
+10. Evaluate frozen E0, E3, and E5 under interaction perturbations.
+
+All E1-E5 experiments use the same generated corpus and the same balanced
+airline/retail/telecom row order. Synthetic validation is used for checkpoint
+selection. Official `base` results are not used for tuning.
 
 Algorithm experiments:
 

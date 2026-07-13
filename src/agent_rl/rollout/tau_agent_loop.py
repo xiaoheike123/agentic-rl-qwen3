@@ -91,6 +91,9 @@ class TauAgentLoop(AgentLoopBase):
     ) -> AgentLoopOutput:
         domain = _required_string(kwargs, "domain")
         task_id = _required_string(kwargs, "task_id")
+        synthetic_task = kwargs.get("synthetic_task")
+        if synthetic_task is not None and not isinstance(synthetic_task, dict):
+            raise TypeError("dataset field 'synthetic_task' must be an object")
         group_id = str(kwargs.get("uid", task_id))
         sample_index = int(kwargs.get("rollout_n", 0))
         seed = kwargs.get("seed")
@@ -103,6 +106,7 @@ class TauAgentLoop(AgentLoopBase):
                 user_llm=self.settings.user_llm,
                 user_llm_args=dict(self.settings.user_llm_args or {}),
                 all_messages_as_observation=self.settings.all_messages_as_observation,
+                task_data=synthetic_task,
             )
         )
         reset = await self.loop.run_in_executor(
@@ -140,6 +144,11 @@ class TauAgentLoop(AgentLoopBase):
             sample_index=sample_index,
             seed=int(seed) if seed is not None else None,
             user_model=self.settings.user_llm,
+            metadata={
+                "task_source": (
+                    "synthetic" if synthetic_task is not None else "official"
+                )
+            },
         )
 
         terminated = False

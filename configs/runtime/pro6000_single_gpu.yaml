@@ -1,8 +1,11 @@
 model_path: /root/autodl-tmp/models/Qwen3-8B
 output_root: /root/autodl-tmp/agent-rl-outputs
 dataset_root: /root/autodl-tmp/agent-rl-data
+synthetic_corpus_root: /root/autodl-tmp/agent-rl-data/synthetic
+synthetic_max_per_split_per_domain: 128
 train_batch_size: 4
 rollout_group_size: 8
+evaluation_trials: 4
 ppo_mini_batch_size: 32
 ppo_micro_batch_size_per_gpu: 1
 total_epochs: 3

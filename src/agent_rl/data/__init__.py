@@ -1,1 +1,1 @@
-"""Trajectory schemas and public task-identity dataset builders."""
+"""Trajectory schemas, synthetic training data, and official evaluation IDs."""

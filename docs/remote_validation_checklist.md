@@ -74,16 +74,36 @@ git diff --check
 
 Expected: compilation and every unit test pass.
 
-## 6. tau2 identity-only datasets
+## 6. Build and audit synthetic training data
 
 ```bash
-$PY -m agent_rl.data.build_dataset --domain airline --split train --output /root/autodl-tmp/agent-rl-data/airline/train.jsonl
-$PY -m agent_rl.data.build_dataset --domain airline --split validation --output /root/autodl-tmp/agent-rl-data/airline/validation.jsonl
-head -n 1 /root/autodl-tmp/agent-rl-data/airline/train.jsonl
+bash scripts/data/build_synthetic.sh
+cat /root/autodl-tmp/agent-rl-data/synthetic/manifest.json
+$PY - <<'PY'
+import json
+from collections import Counter
+from pathlib import Path
+
+root = Path('/root/autodl-tmp/agent-rl-data/balanced')
+for split in ('train', 'validation'):
+    rows = [json.loads(line) for line in (root / f'{split}.jsonl').read_text().splitlines()]
+    print(split, Counter(row['domain'] for row in rows))
+    assert all(row['task_id'].startswith('synthetic-') for row in rows)
+    assert all('synthetic_task' in row for row in rows)
+PY
 ```
 
-Expected: rows contain domain/task IDs and dummy prompts, never evaluation
-criteria or hidden answers.
+Expected: all Oracle checks pass, the manifest records accepted and rejected
+counts, and balanced files contain equal counts for all three domains.
+
+Export but do not train on the official evaluation set:
+
+```bash
+$PY -m agent_rl.data.build_dataset official-eval \
+  --output /root/autodl-tmp/agent-rl-data/official_eval/base.jsonl \
+  --domains airline retail telecom --split base
+test "$(wc -l < /root/autodl-tmp/agent-rl-data/official_eval/base.jsonl)" -eq 278
+```
 
 ## 7. Resolve the E1 command without training
 
@@ -94,9 +114,10 @@ $PY -m agent_rl.trainer.verl_entry --config configs/train/e1_grpo_sequence.yaml 
 Check model path, dataset paths, `algorithm.adv_estimator=grpo`,
 `loss_agg_mode=seq-mean-token-mean`, full-run group size 8, and one GPU.
 
-## 8. One-step E1 training smoke
+## 8. E0 and one-step E1 smoke
 
-Before updating weights, record the exact-pipeline E0 baseline:
+Before formal training, record E0 once. It evaluates all 278 official base
+tasks with four trials and is therefore a full run, not a quick smoke:
 
 ```bash
 WANDB_MODE=offline bash scripts/train/train_experiment.sh \
