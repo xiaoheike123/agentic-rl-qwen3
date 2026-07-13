@@ -62,6 +62,31 @@ class CollectedGroup:
     episodes: tuple[EpisodeRecord, ...]
     expected_size: int
 
+    def __post_init__(self) -> None:
+        if self.expected_size < 2:
+            raise ValueError("expected_size must be at least two for GRPO")
+
+        if len(self.episodes) > self.expected_size:
+            raise ValueError("a rollout group cannot exceed expected_size")
+
+        sample_indices = [episode.sample_index for episode in self.episodes]
+        if len(sample_indices) != len(set(sample_indices)):
+            raise ValueError("a rollout group cannot contain duplicate sample indices")
+
+        if len(self.completed) == self.expected_size:
+            hashes = [
+                episode.metadata.get("initial_db_hash")
+                for episode in self.completed
+            ]
+            if not all(isinstance(value, str) and value for value in hashes):
+                raise ValueError(
+                    "every completed GRPO sample must record initial_db_hash"
+                )
+            if len(set(hashes)) != 1:
+                raise ValueError(
+                    "all samples in a GRPO group must start from the same DB state"
+                )
+
     @property
     def completed(self) -> tuple[EpisodeRecord, ...]:
         return tuple(

@@ -79,10 +79,27 @@ Expected: compilation and every unit test pass.
 ```bash
 bash scripts/data/build_synthetic.sh
 cat /root/autodl-tmp/agent-rl-data/synthetic/manifest.json
+cat /root/autodl-tmp/agent-rl-data/synthetic/quality_audit.md
 $PY - <<'PY'
 import json
 from collections import Counter
 from pathlib import Path
+
+corpus = Path('/root/autodl-tmp/agent-rl-data/synthetic')
+training_db = Path('/root/autodl-tmp/agent-rl-data/training_db')
+manifest = json.loads((corpus / 'manifest.json').read_text())
+db_manifest = json.loads((training_db / 'manifest.json').read_text())
+audit = json.loads((corpus / 'quality_audit.json').read_text())
+assert manifest['config']['generator_version'] == '2.2.0'
+assert manifest['config']['seed'] == 43
+assert db_manifest['version'] == '1.0.0'
+assert manifest['config']['training_database_fingerprint']
+assert audit['status'] == 'PASS'
+for domain in ('airline', 'retail', 'telecom'):
+    assert db_manifest['domains'][domain]['official_identifier_overlap'] == 0
+    stats = manifest['domains'][domain]
+    assert stats['accepted_train'] == 128
+    assert stats['accepted_validation'] == 22
 
 root = Path('/root/autodl-tmp/agent-rl-data/balanced')
 for split in ('train', 'validation'):
@@ -90,11 +107,22 @@ for split in ('train', 'validation'):
     print(split, Counter(row['domain'] for row in rows))
     assert all(row['task_id'].startswith('synthetic-') for row in rows)
     assert all('synthetic_task' in row for row in rows)
+    assert all(
+        row['extra_info']['database_source'] == 'pseudonymized_training'
+        for row in rows
+    )
+    assert all(
+        row['extra_info']['training_database_fingerprint']
+        == manifest['config']['training_database_fingerprint']
+        for row in rows
+    )
 PY
 ```
 
-Expected: all Oracle checks pass, the manifest records accepted and rejected
-counts, and balanced files contain equal counts for all three domains.
+Expected: all Oracle and policy checks pass, the quality audit is `PASS`, and
+the balanced files contain 128 train plus 22 validation records per domain.
+Seed 43 controls clean-room corpus construction; training sampling still uses
+seed 42. Existing corpora from an older generator version must be rebuilt.
 
 Export but do not train on the official evaluation set:
 

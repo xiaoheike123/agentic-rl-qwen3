@@ -1,6 +1,11 @@
+from typing import Any
+
+from tau2.gym.gym_agent import AgentGymEnv
+
 from agent_rl.envs.tau_env import (
     EVALUATOR_TAU_INFO_KEYS,
     PUBLIC_TAU_INFO_KEYS,
+    _TransformableAgentGymEnv,
     evaluator_tau_info,
     public_tau_info,
 )
@@ -53,3 +58,47 @@ def test_public_tau_info_does_not_mutate_upstream_info() -> None:
     public_tau_info(raw_info, domain="retail", task_id="synthetic-retail-1")
 
     assert "task" in raw_info
+
+
+def test_official_evaluation_uses_the_upstream_database(
+    monkeypatch: Any,
+) -> None:
+    expected = object()
+    environment = _TransformableAgentGymEnv.__new__(_TransformableAgentGymEnv)
+    environment._database_override = None
+    environment._environment_transform = None
+    monkeypatch.setattr(
+        AgentGymEnv,
+        "_get_environment",
+        lambda _self: expected,
+    )
+
+    assert environment._get_environment() is expected
+
+
+def test_synthetic_training_injects_a_private_database_copy(
+    monkeypatch: Any,
+) -> None:
+    provided = {"customers": ["synthetic-customer"]}
+    received: dict[str, Any] = {}
+    environment = _TransformableAgentGymEnv.__new__(_TransformableAgentGymEnv)
+    environment._database_override = provided
+    environment._environment_transform = None
+    environment.domain = "telecom"
+    environment.solo_mode = False
+
+    def constructor(*, db: Any, solo_mode: bool) -> dict[str, Any]:
+        received["db"] = db
+        received["solo_mode"] = solo_mode
+        return {"database": db}
+
+    monkeypatch.setattr(
+        "agent_rl.envs.tau_env.registry.get_env_constructor",
+        lambda domain: constructor if domain == "telecom" else None,
+    )
+
+    result = environment._get_environment()
+
+    assert result["database"] == provided
+    assert received["db"] is not provided
+    assert received["solo_mode"] is False

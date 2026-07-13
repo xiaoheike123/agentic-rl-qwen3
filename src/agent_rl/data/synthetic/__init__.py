@@ -2,7 +2,6 @@
 
 from agent_rl.data.synthetic.schema import (
     GenerationMetadata,
-    OverlapMetadata,
     SyntheticSplit,
     SyntheticTaskRecord,
     VerificationMetadata,
@@ -10,7 +9,6 @@ from agent_rl.data.synthetic.schema import (
 
 __all__ = [
     "GenerationMetadata",
-    "OverlapMetadata",
     "SyntheticSplit",
     "SyntheticTaskRecord",
     "VerificationMetadata",

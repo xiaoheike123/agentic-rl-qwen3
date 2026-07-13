@@ -9,7 +9,6 @@ from tau2.data_model.tasks import (
 from agent_rl.data.synthetic.fingerprint import exact_fingerprint
 from agent_rl.data.synthetic.schema import (
     GenerationMetadata,
-    OverlapMetadata,
     SyntheticSplit,
     SyntheticTaskRecord,
     VerificationMetadata,
@@ -54,14 +53,6 @@ def test_synthetic_record_round_trip() -> None:
             action_count=1,
             initial_db_hash="before",
             target_db_hash="after",
-        ),
-        overlap=OverlapMetadata(
-            passed=True,
-            exact_match=False,
-            same_action_arguments=False,
-            nearest_task_id="official-1",
-            nearest_similarity=0.2,
-            threshold=0.82,
         ),
     )
 

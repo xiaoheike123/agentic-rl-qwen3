@@ -1,11 +1,17 @@
-from agent_rl.data.synthetic.sampler import balanced_records
+import json
+from pathlib import Path
+
+from agent_rl.data.synthetic.sampler import (
+    balanced_records,
+    build_balanced_verl_dataset,
+)
 from agent_rl.data.synthetic.schema import (
     GenerationMetadata,
-    OverlapMetadata,
     SyntheticSplit,
     SyntheticTaskRecord,
     VerificationMetadata,
 )
+from agent_rl.data.synthetic.storage import write_records
 
 
 def _record(domain: str, index: int) -> SyntheticTaskRecord:
@@ -38,7 +44,6 @@ def _record(domain: str, index: int) -> SyntheticTaskRecord:
             source_entities=(f"entity-{index}",),
         ),
         verification=VerificationMetadata(True, True, 1, "a", "b"),
-        overlap=OverlapMetadata(True, False, False, None, 0.0, 0.82),
     )
 
 
@@ -59,3 +64,42 @@ def test_balanced_records_use_equal_domain_counts() -> None:
     assert {domain: [item.domain for item in selected].count(domain) for domain in {
         "airline", "retail", "telecom"
     }} == {"airline": 3, "retail": 3, "telecom": 3}
+
+
+def test_verl_export_carries_training_database_provenance(
+    tmp_path: Path,
+) -> None:
+    corpus = tmp_path / "corpus"
+    fingerprint = "f" * 64
+    for domain in ("airline", "retail", "telecom"):
+        write_records(
+            corpus / domain / "train.jsonl",
+            [_record(domain, 1)],
+        )
+    (corpus / "manifest.json").write_text(
+        json.dumps(
+            {"config": {"training_database_fingerprint": fingerprint}}
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "train.jsonl"
+
+    count = build_balanced_verl_dataset(
+        output,
+        corpus_root=corpus,
+        split=SyntheticSplit.TRAIN,
+        seed=42,
+    )
+
+    rows = [json.loads(line) for line in output.read_text().splitlines()]
+    assert count == 3
+    assert all(
+        row["extra_info"]["database_source"]
+        == "pseudonymized_training"
+        for row in rows
+    )
+    assert all(
+        row["extra_info"]["training_database_fingerprint"]
+        == fingerprint
+        for row in rows
+    )

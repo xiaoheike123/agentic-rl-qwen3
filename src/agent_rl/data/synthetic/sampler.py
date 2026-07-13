@@ -60,6 +60,21 @@ def build_balanced_verl_dataset(
     per_domain_limit: int | None = None,
 ) -> int:
     root = Path(corpus_root)
+    manifest_path = root / "manifest.json"
+    if not manifest_path.is_file():
+        raise FileNotFoundError(manifest_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest_config = manifest.get("config") or {}
+    training_database_fingerprint = manifest_config.get(
+        "training_database_fingerprint"
+    )
+    if not isinstance(training_database_fingerprint, str) or not (
+        training_database_fingerprint.strip()
+    ):
+        raise ValueError(
+            "synthetic corpus manifest has no training database fingerprint"
+        )
+
     records = []
     for domain in ("airline", "retail", "telecom"):
         records.extend(load_records(root / domain / f"{split.value}.jsonl"))
@@ -95,6 +110,10 @@ def build_balanced_verl_dataset(
                     "split": split.value,
                     "semantic_fingerprint": record.semantic_fingerprint,
                     "generator_version": record.generation.generator_version,
+                    "database_source": "pseudonymized_training",
+                    "training_database_fingerprint": (
+                        training_database_fingerprint
+                    ),
                 },
             }
             stream.write(

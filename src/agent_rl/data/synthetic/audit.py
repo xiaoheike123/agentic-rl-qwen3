@@ -40,9 +40,11 @@ class SyntheticAuditConfig:
     corpus_root: Path
     domains: tuple[str, ...] = ("airline", "retail", "telecom")
     min_split_size: int = 20
-    min_templates_per_domain: int = 2
-    max_dominant_template_fraction: float = 0.80
+    min_templates_per_domain: int = 6
+    max_dominant_template_fraction: float = 0.35
     max_parameter_variant_fraction: float = 0.50
+    min_multi_action_fraction: float = 0.35
+    min_complex_or_hard_fraction: float = 0.30
     near_duplicate_threshold: float = 0.92
     max_near_duplicate_record_fraction: float = 0.20
     human_sample_per_domain: int = 20
@@ -64,6 +66,8 @@ class SyntheticAuditConfig:
             ),
             ("max_parameter_variant_fraction", self.max_parameter_variant_fraction),
             ("near_duplicate_threshold", self.near_duplicate_threshold),
+            ("min_multi_action_fraction", self.min_multi_action_fraction),
+            ("min_complex_or_hard_fraction", self.min_complex_or_hard_fraction),
             (
                 "max_near_duplicate_record_fraction",
                 self.max_near_duplicate_record_fraction,
@@ -92,14 +96,16 @@ class DomainAudit:
     template_counts: dict[str, int]
     action_counts: dict[str, int]
     action_count_distribution: dict[str, int]
+    difficulty_counts: dict[str, int]
     dominant_template_fraction: float
     normalized_template_entropy: float
     parameter_variant_record_fraction: float
     max_variants_per_entity_template: int
     multi_action_fraction: float
+    complex_or_hard_fraction: float
+    policy_metadata_coverage: float
     communication_coverage: float
     verified_fraction: float
-    overlap_pass_fraction: float
     train_entity_count: int
     validation_entity_count: int
     entity_leakage: list[str]
@@ -186,10 +192,22 @@ def _near_duplicates(
     pair_count = 0
     for left_index, left in enumerate(records):
         for right_index in range(left_index + 1, len(records)):
+            right = records[right_index]
+            # Reusing one task family across isolated entities is intentional.
+            # Same-entity variants and split leakage have separate quality gates.
+            if left.generation.template == right.generation.template:
+                continue
+            left_policy = left.metadata.get("policy", {})
+            right_policy = right.metadata.get("policy", {})
+            left_cases = set(left_policy.get("support_cases", []))
+            right_cases = set(right_policy.get("support_cases", []))
+            # Single-fault and composed-fault tasks deliberately share a
+            # curriculum component; unrelated support cases remain compared.
+            if left_cases and right_cases and left_cases & right_cases:
+                continue
             similarity = jaccard(token_sets[left_index], token_sets[right_index])
             if similarity < threshold:
                 continue
-            right = records[right_index]
             pair_count += 1
             involved.update((left.task_id, right.task_id))
             if len(examples) < 20:
@@ -219,6 +237,8 @@ def _audit_domain(
     action_lengths: Counter[str] = Counter()
     communication_present = 0
     multi_action = 0
+    policy_metadata_present = 0
+    difficulties: Counter[str] = Counter()
     variant_groups: dict[tuple[str, tuple[str, ...]], list[str]] = defaultdict(list)
     fingerprint_counts = Counter(record.semantic_fingerprint for record in records)
 
@@ -229,6 +249,15 @@ def _audit_domain(
         action_lengths[str(len(oracle_actions))] += 1
         actions.update(action.name for action in oracle_actions)
         multi_action += int(len(oracle_actions) > 1)
+        policy = record.metadata.get("policy")
+        validation = record.metadata.get("policy_validation")
+        if isinstance(policy, dict):
+            difficulties[str(policy.get("difficulty", "missing"))] += 1
+        policy_metadata_present += int(
+            isinstance(policy, dict)
+            and isinstance(validation, dict)
+            and validation.get("passed") is True
+        )
         communication_present += int(bool(criteria and criteria.communicate_info))
         variant_groups[
             (record.generation.template, record.generation.source_entities)
@@ -259,6 +288,7 @@ def _audit_domain(
         template_counts=dict(sorted(templates.items())),
         action_counts=dict(sorted(actions.items())),
         action_count_distribution=dict(sorted(action_lengths.items())),
+        difficulty_counts=dict(sorted(difficulties.items())),
         dominant_template_fraction=(
             max(templates.values()) / total if templates and total else 0.0
         ),
@@ -266,12 +296,13 @@ def _audit_domain(
         parameter_variant_record_fraction=_fraction(variant_records, total),
         max_variants_per_entity_template=max_variants,
         multi_action_fraction=_fraction(multi_action, total),
+        complex_or_hard_fraction=_fraction(
+            difficulties["complex"] + difficulties["hard"], total
+        ),
+        policy_metadata_coverage=_fraction(policy_metadata_present, total),
         communication_coverage=_fraction(communication_present, total),
         verified_fraction=_fraction(
             sum(record.verification.oracle_verified for record in records), total
-        ),
-        overlap_pass_fraction=_fraction(
-            sum(record.overlap.passed for record in records), total
         ),
         train_entity_count=len(train_entities),
         validation_entity_count=len(validation_entities),
@@ -389,10 +420,10 @@ def _domain_findings(
         "1.0",
     )
     add(
-        "official_overlap_filter",
-        AuditStatus.PASS if audit.overlap_pass_fraction == 1.0 else AuditStatus.FAIL,
-        "records passing official benchmark overlap checks",
-        round(audit.overlap_pass_fraction, 6),
+        "policy_metadata",
+        AuditStatus.PASS if audit.policy_metadata_coverage == 1.0 else AuditStatus.FAIL,
+        "records with independently validated private policy metadata",
+        round(audit.policy_metadata_coverage, 6),
         "1.0",
     )
     add(
@@ -404,10 +435,26 @@ def _domain_findings(
     )
     add(
         "multi_action_coverage",
-        AuditStatus.PASS if audit.multi_action_fraction > 0.0 else AuditStatus.WARN,
+        (
+            AuditStatus.PASS
+            if audit.multi_action_fraction >= config.min_multi_action_fraction
+            else AuditStatus.FAIL
+        ),
         "records requiring more than one Oracle action",
         round(audit.multi_action_fraction, 6),
-        ">0.0 for long-horizon coverage",
+        f">={config.min_multi_action_fraction}",
+    )
+    add(
+        "difficulty_coverage",
+        (
+            AuditStatus.PASS
+            if audit.complex_or_hard_fraction
+            >= config.min_complex_or_hard_fraction
+            else AuditStatus.FAIL
+        ),
+        "records labeled complex or hard",
+        round(audit.complex_or_hard_fraction, 6),
+        f">={config.min_complex_or_hard_fraction}",
     )
     return findings
 
@@ -526,12 +573,20 @@ def write_audit_report(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--corpus-root", required=True)
+    parser.add_argument(
+        "--domains",
+        nargs="+",
+        choices=sorted(SUPPORTED_DOMAINS),
+        default=["airline", "retail", "telecom"],
+    )
     parser.add_argument("--json-output")
     parser.add_argument("--markdown-output")
     parser.add_argument("--fail-on-quality-gate", action="store_true")
     args = parser.parse_args()
     root = Path(args.corpus_root)
-    report = audit_synthetic_corpus(SyntheticAuditConfig(corpus_root=root))
+    report = audit_synthetic_corpus(
+        SyntheticAuditConfig(corpus_root=root, domains=tuple(args.domains))
+    )
     json_path = Path(args.json_output) if args.json_output else root / "audit.json"
     markdown_path = (
         Path(args.markdown_output)

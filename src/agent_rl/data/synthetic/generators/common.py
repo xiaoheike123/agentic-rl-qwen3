@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
 from tau2.data_model.tasks import (
     Action,
     Description,
+    EnvFunctionCall,
     EvaluationCriteria,
+    InitialState,
     RewardType,
     StructuredUserInstructions,
     Task,
@@ -20,7 +23,7 @@ from tau2.data_model.tasks import (
 from agent_rl.data.synthetic.schema import GenerationMetadata
 
 
-GENERATOR_VERSION = "2.0.0"
+GENERATOR_VERSION = "2.2.0"
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,12 +32,15 @@ class OracleActionSpec:
 
     name: str
     arguments: dict[str, Any]
+    requestor: str = "assistant"
 
     def __post_init__(self) -> None:
         if not self.name.strip():
             raise ValueError("Oracle action name must not be empty")
         if not isinstance(self.arguments, dict):
             raise TypeError("Oracle action arguments must be a dictionary")
+        if self.requestor not in {"assistant", "user"}:
+            raise ValueError("Oracle action requestor must be assistant or user")
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,6 +48,7 @@ class GeneratedCandidate:
     domain: str
     task: Task
     generation: GenerationMetadata
+    metadata: dict[str, Any]
 
 
 def make_candidate(
@@ -56,6 +63,9 @@ def make_candidate(
     actions: tuple[OracleActionSpec, ...],
     communicate_info: list[str],
     purpose: str,
+    metadata: dict[str, Any] | None = None,
+    initialization_actions: tuple[EnvFunctionCall, ...] = (),
+    user_tools: list[str] | None = None,
 ) -> GeneratedCandidate:
     if not actions:
         raise ValueError("A synthetic task requires at least one Oracle action")
@@ -67,8 +77,15 @@ def make_candidate(
             "seed": seed,
             "entities": entities,
             "actions": [
-                {"name": action.name, "arguments": action.arguments}
+                {
+                    "name": action.name,
+                    "arguments": action.arguments,
+                    "requestor": action.requestor,
+                }
                 for action in actions
+            ],
+            "initialization_actions": [
+                action.model_dump(mode="json") for action in initialization_actions
             ],
         },
         sort_keys=True,
@@ -94,12 +111,16 @@ def make_candidate(
             ),
         ),
         ticket=None,
-        initial_state=None,
+        initial_state=(
+            InitialState(initialization_actions=list(initialization_actions))
+            if initialization_actions
+            else None
+        ),
         evaluation_criteria=EvaluationCriteria(
             actions=[
                 Action(
                     action_id=f"oracle_{action.name}_{index}",
-                    requestor="assistant",
+                    requestor=action.requestor,
                     name=action.name,
                     arguments=action.arguments,
                 )
@@ -110,7 +131,7 @@ def make_candidate(
         ),
         issues=None,
         required_documents=None,
-        user_tools=None,
+        user_tools=user_tools,
     )
     return GeneratedCandidate(
         domain=domain,
@@ -122,4 +143,5 @@ def make_candidate(
             template=template,
             source_entities=entities,
         ),
+        metadata=deepcopy(metadata or {}),
     )

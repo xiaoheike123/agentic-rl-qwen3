@@ -1,4 +1,4 @@
-"""Build a verified, benchmark-filtered three-domain synthetic corpus."""
+"""Build a verified, clean-room three-domain synthetic corpus."""
 
 from __future__ import annotations
 
@@ -12,13 +12,21 @@ from pathlib import Path
 from agent_rl.data.synthetic.fingerprint import semantic_fingerprint
 from agent_rl.data.synthetic.generators import GENERATORS
 from agent_rl.data.synthetic.generators.common import GENERATOR_VERSION
-from agent_rl.data.synthetic.overlap import BenchmarkOverlapGuard
+from agent_rl.data.synthetic.policy_validation import validate_candidate_policy
 from agent_rl.data.synthetic.schema import (
     SUPPORTED_DOMAINS,
     SyntheticSplit,
     SyntheticTaskRecord,
 )
 from agent_rl.data.synthetic.storage import write_records
+from agent_rl.data.synthetic.training_db import (
+    TRAINING_DB_VERSION,
+    TrainingDatabaseConfig,
+    build_training_databases,
+    load_training_database,
+    training_database_fingerprint,
+    validate_training_databases,
+)
 from agent_rl.data.synthetic.verifier import verify_oracle_task
 
 
@@ -28,8 +36,10 @@ class SyntheticBuildConfig:
     domains: tuple[str, ...] = ("airline", "retail", "telecom")
     seed: int = 42
     validation_fraction: float = 0.15
-    similarity_threshold: float = 0.82
-    max_per_split_per_domain: int | None = None
+    max_train_per_domain: int | None = None
+    max_validation_per_domain: int | None = None
+    training_database_root: Path | None = None
+    telecom_clone_factor: int = 16
 
     def __post_init__(self) -> None:
         invalid = set(self.domains) - SUPPORTED_DOMAINS
@@ -39,9 +49,23 @@ class SyntheticBuildConfig:
             raise ValueError("at least one domain is required")
         if not 0.0 < self.validation_fraction < 1.0:
             raise ValueError("validation_fraction must be between zero and one")
-        if self.max_per_split_per_domain is not None:
-            if self.max_per_split_per_domain <= 0:
-                raise ValueError("max_per_split_per_domain must be positive")
+        for name, value in (
+            ("max_train_per_domain", self.max_train_per_domain),
+            ("max_validation_per_domain", self.max_validation_per_domain),
+        ):
+            if value is not None and value <= 0:
+                raise ValueError(f"{name} must be positive")
+        if self.telecom_clone_factor <= 0:
+            raise ValueError("telecom_clone_factor must be positive")
+
+    @property
+    def resolved_training_database_root(self) -> Path:
+        return self.training_database_root or self.output_root.parent / "training_db"
+
+    def limit_for(self, split: SyntheticSplit) -> int | None:
+        if split is SyntheticSplit.TRAIN:
+            return self.max_train_per_domain
+        return self.max_validation_per_domain
 
 
 @dataclass(slots=True)
@@ -49,8 +73,8 @@ class DomainBuildStats:
     generated: int = 0
     accepted_train: int = 0
     accepted_validation: int = 0
+    rejected_policy: int = 0
     rejected_oracle: int = 0
-    rejected_overlap: int = 0
     rejected_duplicate: int = 0
 
 
@@ -68,14 +92,25 @@ def validate_corpus_manifest(config: SyntheticBuildConfig) -> None:
         raise FileNotFoundError(manifest_path)
     with manifest_path.open("r", encoding="utf-8") as stream:
         manifest = json.load(stream)
+    training_config = TrainingDatabaseConfig(
+        output_root=config.resolved_training_database_root,
+        seed=config.seed,
+        telecom_clone_factor=config.telecom_clone_factor,
+    )
+    training_manifest = validate_training_databases(training_config)
     actual = manifest.get("config") or {}
     expected = {
         "generator_version": GENERATOR_VERSION,
+        "training_database_version": TRAINING_DB_VERSION,
+        "training_database_fingerprint": training_database_fingerprint(
+            training_manifest
+        ),
         "domains": list(config.domains),
         "seed": config.seed,
         "validation_fraction": config.validation_fraction,
-        "similarity_threshold": config.similarity_threshold,
-        "max_per_split_per_domain": config.max_per_split_per_domain,
+        "max_train_per_domain": config.max_train_per_domain,
+        "max_validation_per_domain": config.max_validation_per_domain,
+        "telecom_clone_factor": config.telecom_clone_factor,
     }
     mismatches = {
         key: {"expected": value, "actual": actual.get(key)}
@@ -124,6 +159,15 @@ def _entity_split_map(
 
 def build_synthetic_corpus(config: SyntheticBuildConfig) -> SyntheticBuildReport:
     config.output_root.mkdir(parents=True, exist_ok=True)
+    training_config = TrainingDatabaseConfig(
+        output_root=config.resolved_training_database_root,
+        seed=config.seed,
+        telecom_clone_factor=config.telecom_clone_factor,
+    )
+    if (training_config.output_root / "manifest.json").is_file():
+        training_manifest = validate_training_databases(training_config)
+    else:
+        training_manifest = build_training_databases(training_config)
     report = SyntheticBuildReport()
     rejected_rows: list[dict[str, object]] = []
 
@@ -131,7 +175,8 @@ def build_synthetic_corpus(config: SyntheticBuildConfig) -> SyntheticBuildReport
         stats = DomainBuildStats()
         report.domains[domain] = stats
         domain_seed = config.seed + domain_index * 1_000_003
-        candidates = GENERATORS[domain](domain_seed)
+        database = load_training_database(training_config.output_root, domain)
+        candidates = GENERATORS[domain](domain_seed, database)
         random.Random(domain_seed).shuffle(candidates)
         stats.generated = len(candidates)
         split_map = _entity_split_map(
@@ -144,10 +189,6 @@ def build_synthetic_corpus(config: SyntheticBuildConfig) -> SyntheticBuildReport
             seed=config.seed,
             validation_fraction=config.validation_fraction,
         )
-        guard = BenchmarkOverlapGuard(
-            domain,
-            similarity_threshold=config.similarity_threshold,
-        )
         by_split: dict[SyntheticSplit, list[SyntheticTaskRecord]] = {
             SyntheticSplit.TRAIN: [],
             SyntheticSplit.VALIDATION: [],
@@ -157,12 +198,23 @@ def build_synthetic_corpus(config: SyntheticBuildConfig) -> SyntheticBuildReport
         for candidate in candidates:
             primary_entity = candidate.generation.source_entities[0]
             split = split_map[primary_entity]
-            if (
-                config.max_per_split_per_domain is not None
-                and len(by_split[split]) >= config.max_per_split_per_domain
-            ):
+            split_limit = config.limit_for(split)
+            if split_limit is not None and len(by_split[split]) >= split_limit:
                 continue
-            verification = verify_oracle_task(domain, candidate.task)
+            try:
+                validate_candidate_policy(candidate, database)
+            except ValueError as error:
+                stats.rejected_policy += 1
+                rejected_rows.append(
+                    {
+                        "domain": domain,
+                        "task_id": candidate.task.id,
+                        "reason": "policy",
+                        "detail": str(error),
+                    }
+                )
+                continue
+            verification = verify_oracle_task(domain, candidate.task, database)
             if not verification.oracle_verified:
                 stats.rejected_oracle += 1
                 rejected_rows.append(
@@ -171,20 +223,6 @@ def build_synthetic_corpus(config: SyntheticBuildConfig) -> SyntheticBuildReport
                         "task_id": candidate.task.id,
                         "reason": "oracle",
                         "detail": verification.error,
-                    }
-                )
-                continue
-
-            overlap = guard.inspect(candidate.task)
-            if not overlap.passed:
-                stats.rejected_overlap += 1
-                rejected_rows.append(
-                    {
-                        "domain": domain,
-                        "task_id": candidate.task.id,
-                        "reason": "benchmark_overlap",
-                        "nearest_task_id": overlap.nearest_task_id,
-                        "similarity": overlap.nearest_similarity,
                     }
                 )
                 continue
@@ -201,7 +239,10 @@ def build_synthetic_corpus(config: SyntheticBuildConfig) -> SyntheticBuildReport
                 semantic_fingerprint=fingerprint,
                 generation=candidate.generation,
                 verification=verification,
-                overlap=overlap,
+                metadata={
+                    **candidate.metadata,
+                    "policy_validation": {"passed": True},
+                },
             )
             by_split[split].append(record)
 
@@ -235,8 +276,17 @@ def build_synthetic_corpus(config: SyntheticBuildConfig) -> SyntheticBuildReport
             {
                 "config": {
                     "generator_version": GENERATOR_VERSION,
-                    **asdict(config),
+                    "training_database_version": TRAINING_DB_VERSION,
+                    "training_database_fingerprint": (
+                        training_database_fingerprint(training_manifest)
+                    ),
                     "output_root": str(config.output_root),
+                    "domains": list(config.domains),
+                    "seed": config.seed,
+                    "validation_fraction": config.validation_fraction,
+                    "max_train_per_domain": config.max_train_per_domain,
+                    "max_validation_per_domain": config.max_validation_per_domain,
+                    "telecom_clone_factor": config.telecom_clone_factor,
                 },
                 **report.to_dict(),
             },
@@ -259,8 +309,10 @@ def main() -> None:
     )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--validation-fraction", type=float, default=0.15)
-    parser.add_argument("--similarity-threshold", type=float, default=0.82)
-    parser.add_argument("--max-per-split-per-domain", type=int)
+    parser.add_argument("--max-train-per-domain", type=int)
+    parser.add_argument("--max-validation-per-domain", type=int)
+    parser.add_argument("--training-database-root")
+    parser.add_argument("--telecom-clone-factor", type=int, default=16)
     args = parser.parse_args()
     report = build_synthetic_corpus(
         SyntheticBuildConfig(
@@ -268,8 +320,14 @@ def main() -> None:
             domains=tuple(args.domains),
             seed=args.seed,
             validation_fraction=args.validation_fraction,
-            similarity_threshold=args.similarity_threshold,
-            max_per_split_per_domain=args.max_per_split_per_domain,
+            max_train_per_domain=args.max_train_per_domain,
+            max_validation_per_domain=args.max_validation_per_domain,
+            training_database_root=(
+                Path(args.training_database_root)
+                if args.training_database_root
+                else None
+            ),
+            telecom_clone_factor=args.telecom_clone_factor,
         )
     )
     print(json.dumps(report.to_dict(), indent=2))

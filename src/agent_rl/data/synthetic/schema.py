@@ -10,7 +10,7 @@ from typing import Any
 from tau2.data_model.tasks import Task
 
 
-SYNTHETIC_SCHEMA_VERSION = 1
+SYNTHETIC_SCHEMA_VERSION = 2
 SUPPORTED_DOMAINS = frozenset({"airline", "retail", "telecom"})
 
 
@@ -63,24 +63,6 @@ class VerificationMetadata:
 
 
 @dataclass(frozen=True, slots=True)
-class OverlapMetadata:
-    passed: bool
-    exact_match: bool
-    same_action_arguments: bool
-    nearest_task_id: str | None
-    nearest_similarity: float
-    threshold: float
-
-    def __post_init__(self) -> None:
-        if not 0.0 <= self.nearest_similarity <= 1.0:
-            raise ValueError("nearest_similarity must be between zero and one")
-        if not 0.0 <= self.threshold <= 1.0:
-            raise ValueError("threshold must be between zero and one")
-        if self.passed and (self.exact_match or self.same_action_arguments):
-            raise ValueError("an exact benchmark match cannot pass overlap filtering")
-
-
-@dataclass(frozen=True, slots=True)
 class SyntheticTaskRecord:
     """A native tau2 Task plus provenance required for safe training."""
 
@@ -90,7 +72,6 @@ class SyntheticTaskRecord:
     semantic_fingerprint: str
     generation: GenerationMetadata
     verification: VerificationMetadata
-    overlap: OverlapMetadata
     metadata: dict[str, Any] = field(default_factory=dict)
     schema_version: int = SYNTHETIC_SCHEMA_VERSION
 
@@ -109,8 +90,6 @@ class SyntheticTaskRecord:
             raise ValueError("synthetic task IDs must include their domain prefix")
         if not self.verification.oracle_verified:
             raise ValueError("unverified tasks cannot enter the synthetic corpus")
-        if not self.overlap.passed:
-            raise ValueError("benchmark-overlapping tasks cannot enter the corpus")
 
     @property
     def task_id(self) -> str:
@@ -132,5 +111,4 @@ class SyntheticTaskRecord:
         )
         data["generation"] = GenerationMetadata(**generation)
         data["verification"] = VerificationMetadata(**data["verification"])
-        data["overlap"] = OverlapMetadata(**data["overlap"])
         return cls(**data)

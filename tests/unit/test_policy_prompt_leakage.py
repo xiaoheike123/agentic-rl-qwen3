@@ -81,6 +81,17 @@ def test_oracle_answer_never_reaches_any_policy_message(monkeypatch: Any) -> Non
     task["evaluation_criteria"]["actions"][0]["arguments"][
         "reservation_id"
     ] = ORACLE_SENTINEL
+    task["initial_state"] = {
+        "initialization_data": None,
+        "initialization_actions": [
+            {
+                "env_type": "user",
+                "func_name": "hidden_fault_injection",
+                "arguments": {"secret": ORACLE_SENTINEL},
+            }
+        ],
+        "message_history": None,
+    }
     assert ORACLE_SENTINEL in json.dumps(task)
 
     monkeypatch.setattr(

@@ -15,6 +15,7 @@ from agent_rl.data.schemas import (
     ToolCallRecord,
     TurnRecord,
 )
+from agent_rl.data.synthetic.training_db import load_training_database
 from agent_rl.envs.action_parser import ModelToolCall, to_tau_action
 from agent_rl.envs.tau_env import TauEnv, TauEnvConfig
 from agent_rl.prompts.action_prompt import (
@@ -59,6 +60,7 @@ class TauAgentLoopSettings:
     hindsight_config: dict[str, Any] | None = None
     context_max_chars: int = 24_000
     max_action_tokens: int = 2_048
+    training_database_root: str | None = None
 
 
 class TauAgentLoop(AgentLoopBase):
@@ -94,6 +96,18 @@ class TauAgentLoop(AgentLoopBase):
         synthetic_task = kwargs.get("synthetic_task")
         if synthetic_task is not None and not isinstance(synthetic_task, dict):
             raise TypeError("dataset field 'synthetic_task' must be an object")
+        database_override = None
+        database_source = "official_evaluation"
+        if synthetic_task is not None:
+            if not self.settings.training_database_root:
+                raise ValueError(
+                    "synthetic rollout requires settings.training_database_root"
+                )
+            database_override = load_training_database(
+                self.settings.training_database_root,
+                domain,
+            )
+            database_source = "pseudonymized_training"
         group_id = str(kwargs.get("uid", task_id))
         sample_index = int(kwargs.get("rollout_n", 0))
         seed = kwargs.get("seed")
@@ -107,6 +121,7 @@ class TauAgentLoop(AgentLoopBase):
                 user_llm_args=dict(self.settings.user_llm_args or {}),
                 all_messages_as_observation=self.settings.all_messages_as_observation,
                 task_data=synthetic_task,
+                database_override=database_override,
             )
         )
         reset = await self.loop.run_in_executor(
@@ -350,6 +365,7 @@ class TauAgentLoop(AgentLoopBase):
                     "tau_total_turns": len(episode.turns),
                     "tau_retained_credit_turns": len(turn_token_spans),
                     "tau_context_rotations": context_rotations,
+                    "tau_database_source": database_source,
                 },
             },
         )

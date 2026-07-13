@@ -2,7 +2,11 @@ model_path: /root/autodl-tmp/models/Qwen3-8B
 output_root: /root/autodl-tmp/agent-rl-outputs
 dataset_root: /root/autodl-tmp/agent-rl-data
 synthetic_corpus_root: /root/autodl-tmp/agent-rl-data/synthetic
-synthetic_max_per_split_per_domain: 128
+training_database_root: /root/autodl-tmp/agent-rl-data/training_db
+synthetic_seed: 43
+telecom_clone_factor: 16
+synthetic_max_train_per_domain: 128
+synthetic_max_validation_per_domain: 22
 train_batch_size: 4
 rollout_group_size: 8
 evaluation_trials: 4

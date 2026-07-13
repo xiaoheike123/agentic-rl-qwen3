@@ -388,6 +388,7 @@ class EpisodeWorker:
         episode.metadata["context_compression_config"] = asdict(
             self.context_compressor.config
         )
+        episode.metadata["initial_db_hash"] = reset.initial_db_hash
 
         observation = reset.observation
         final_transition: TauTransition | None = None
@@ -452,6 +453,8 @@ class EpisodeWorker:
         episode: EpisodeRecord,
         transition: TauTransition,
     ) -> None:
+        episode.metadata["final_db_hash"] = transition.db_hash
+
         simulation_run = _decode_json_object(
             transition.evaluator_info.get("simulation_run"),
             field_name="simulation_run",

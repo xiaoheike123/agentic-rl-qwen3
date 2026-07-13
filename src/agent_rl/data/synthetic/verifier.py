@@ -2,13 +2,29 @@
 
 from __future__ import annotations
 
+import hashlib
+from copy import deepcopy
+from typing import Any
+
 from tau2.data_model.tasks import Task
 from tau2.registry import registry
 
 from agent_rl.data.synthetic.schema import VerificationMetadata
 
 
-def verify_oracle_task(domain: str, task: Task) -> VerificationMetadata:
+def _environment_hash(environment) -> str:
+    """Hash both assistant-side and user-side state when available."""
+
+    agent_hash = environment.get_db_hash() or ""
+    user_hash = environment.get_user_db_hash() or ""
+    return hashlib.sha256(f"{agent_hash}:{user_hash}".encode("utf-8")).hexdigest()
+
+
+def verify_oracle_task(
+    domain: str,
+    task: Task,
+    database: Any | None = None,
+) -> VerificationMetadata:
     criteria = task.evaluation_criteria
     actions = criteria.actions if criteria and criteria.actions else []
     if not actions:
@@ -19,7 +35,10 @@ def verify_oracle_task(domain: str, task: Task) -> VerificationMetadata:
             error="task has no oracle actions",
         )
 
-    environment = registry.get_env_constructor(domain)(solo_mode=False)
+    constructor_kwargs: dict[str, Any] = {"solo_mode": False}
+    if database is not None:
+        constructor_kwargs["db"] = deepcopy(database)
+    environment = registry.get_env_constructor(domain)(**constructor_kwargs)
     initial_state = task.initial_state
     environment.set_state(
         initialization_data=(
@@ -34,7 +53,7 @@ def verify_oracle_task(domain: str, task: Task) -> VerificationMetadata:
             else []
         ),
     )
-    initial_hash = environment.get_db_hash()
+    initial_hash = _environment_hash(environment)
     try:
         for action in actions:
             environment.make_tool_call(
@@ -49,11 +68,11 @@ def verify_oracle_task(domain: str, task: Task) -> VerificationMetadata:
             database_changed=False,
             action_count=len(actions),
             initial_db_hash=initial_hash,
-            target_db_hash=environment.get_db_hash(),
+            target_db_hash=_environment_hash(environment),
             error=f"{type(error).__name__}: {error}",
         )
 
-    target_hash = environment.get_db_hash()
+    target_hash = _environment_hash(environment)
     changed = initial_hash != target_hash
     return VerificationMetadata(
         oracle_verified=changed,

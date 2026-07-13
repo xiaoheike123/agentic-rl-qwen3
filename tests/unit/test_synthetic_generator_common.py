@@ -12,6 +12,7 @@ from agent_rl.data.synthetic.generators.common import (
     OracleActionSpec,
     make_candidate,
 )
+from agent_rl.data.synthetic.training_db import training_database_fingerprint
 
 
 def test_make_candidate_preserves_ordered_oracle_actions() -> None:
@@ -48,7 +49,7 @@ def test_make_candidate_preserves_ordered_oracle_actions() -> None:
         "oracle_enable_roaming_0",
         "oracle_refuel_data_1",
     ]
-    assert candidate.generation.generator_version == "2.0.0"
+    assert candidate.generation.generator_version == "2.2.0"
 
 
 def test_make_candidate_rejects_an_empty_action_sequence() -> None:
@@ -67,8 +68,20 @@ def test_make_candidate_rejects_an_empty_action_sequence() -> None:
         )
 
 
-def test_manifest_rejects_a_stale_generator_version(tmp_path: Path) -> None:
+def test_manifest_rejects_a_stale_generator_version(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     config = SyntheticBuildConfig(output_root=tmp_path, domains=("airline",))
+    training_manifest = {
+        "version": "1.0.0",
+        "config": {"seed": 42, "telecom_clone_factor": 16},
+        "domains": {},
+    }
+    monkeypatch.setattr(
+        "agent_rl.data.synthetic.builder.validate_training_databases",
+        lambda _config: training_manifest,
+    )
     domain_root = tmp_path / "airline"
     domain_root.mkdir()
     (domain_root / "train.jsonl").write_text("", encoding="utf-8")
@@ -76,11 +89,16 @@ def test_manifest_rejects_a_stale_generator_version(tmp_path: Path) -> None:
     manifest = {
         "config": {
             "generator_version": GENERATOR_VERSION,
+            "training_database_version": "1.0.0",
+            "training_database_fingerprint": training_database_fingerprint(
+                training_manifest
+            ),
             "domains": ["airline"],
             "seed": 42,
             "validation_fraction": 0.15,
-            "similarity_threshold": 0.82,
-            "max_per_split_per_domain": None,
+            "max_train_per_domain": None,
+            "max_validation_per_domain": None,
+            "telecom_clone_factor": 16,
         }
     }
     (tmp_path / "manifest.json").write_text(

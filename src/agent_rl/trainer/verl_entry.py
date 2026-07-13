@@ -38,6 +38,12 @@ def _prepare_files(config: ExperimentConfig) -> tuple[Path, Path, Path]:
         build_synthetic_corpus,
         validate_corpus_manifest,
     )
+    from agent_rl.data.synthetic.audit import (
+        AuditStatus,
+        SyntheticAuditConfig,
+        audit_synthetic_corpus,
+        write_audit_report,
+    )
     from agent_rl.data.synthetic.sampler import build_balanced_verl_dataset
     from agent_rl.data.synthetic.schema import SyntheticSplit
 
@@ -75,17 +81,42 @@ def _prepare_files(config: ExperimentConfig) -> tuple[Path, Path, Path]:
                 runtime.get("synthetic_corpus_root", dataset_root / "synthetic"),
             )
         )
+        synthetic_seed = int(runtime.get("synthetic_seed", 43))
         build_config = SyntheticBuildConfig(
             output_root=corpus_root,
-            seed=seed,
-            max_per_split_per_domain=int(
-                runtime.get("synthetic_max_per_split_per_domain", 128)
-            )
+            seed=synthetic_seed,
+            max_train_per_domain=int(
+                runtime.get("synthetic_max_train_per_domain", 128)
+            ),
+            max_validation_per_domain=int(
+                runtime.get("synthetic_max_validation_per_domain", 22)
+            ),
+            training_database_root=Path(
+                runtime.get("training_database_root", dataset_root / "training_db")
+            ),
+            telecom_clone_factor=int(runtime.get("telecom_clone_factor", 16)),
         )
         if not (corpus_root / "manifest.json").is_file():
             build_synthetic_corpus(build_config)
         else:
             validate_corpus_manifest(build_config)
+        audit_report = audit_synthetic_corpus(
+            SyntheticAuditConfig(corpus_root=corpus_root)
+        )
+        write_audit_report(
+            audit_report,
+            json_path=corpus_root / "quality_audit.json",
+            markdown_path=corpus_root / "quality_audit.md",
+        )
+        if audit_report.status is AuditStatus.FAIL:
+            failed = [
+                f"{item.domain or 'global'}:{item.code}"
+                for item in audit_report.findings
+                if item.status is AuditStatus.FAIL
+            ]
+            raise RuntimeError(
+                "synthetic corpus failed quality audit: " + ", ".join(failed)
+            )
         balanced_root = dataset_root / "balanced"
         train_path = balanced_root / "train.jsonl"
         validation_path = balanced_root / "validation.jsonl"
@@ -93,13 +124,13 @@ def _prepare_files(config: ExperimentConfig) -> tuple[Path, Path, Path]:
             train_path,
             corpus_root=corpus_root,
             split=SyntheticSplit.TRAIN,
-            seed=seed,
+            seed=synthetic_seed,
         )
         build_balanced_verl_dataset(
             validation_path,
             corpus_root=corpus_root,
             split=SyntheticSplit.VALIDATION,
-            seed=seed + 100_000,
+            seed=synthetic_seed + 100_000,
         )
 
     run_dir = output_root / config.experiment.lower()
@@ -141,6 +172,12 @@ def _prepare_files(config: ExperimentConfig) -> tuple[Path, Path, Path]:
                     )
                 ),
                 "max_action_tokens": 2_048,
+                "training_database_root": str(
+                    runtime.get(
+                        "training_database_root",
+                        dataset_root / "training_db",
+                    )
+                ),
             },
         }
     ]

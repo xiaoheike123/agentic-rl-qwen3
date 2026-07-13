@@ -8,6 +8,7 @@ from typing import Any, Callable
 
 from tau2.data_model.tasks import Task
 from tau2.gym.gym_agent import AgentGymEnv
+from tau2.registry import registry
 from tau2.utils.tools import parse_action_string
 
 
@@ -58,11 +59,13 @@ class _TransformableAgentGymEnv(AgentGymEnv):
         task_transform: TaskTransform | None = None,
         environment_transform: EnvironmentTransform | None = None,
         task_override: Task | None = None,
+        database_override: Any | None = None,
         **kwargs: Any,
     ) -> None:
         self._task_transform = task_transform
         self._environment_transform = environment_transform
         self._task_override = deepcopy(task_override)
+        self._database_override = deepcopy(database_override)
         self._transformed_task: Any = None
         super().__init__(*args, **kwargs)
 
@@ -81,10 +84,23 @@ class _TransformableAgentGymEnv(AgentGymEnv):
         return deepcopy(self._transformed_task)
 
     def _get_environment(self) -> Any:
-        environment = super()._get_environment()
+        if self._database_override is None:
+            environment = super()._get_environment()
+        else:
+            environment = registry.get_env_constructor(self.domain)(
+                db=deepcopy(self._database_override),
+                solo_mode=self.solo_mode,
+            )
         if self._environment_transform is not None:
             environment = self._environment_transform(environment)
         return environment
+
+    def get_db_hash(self) -> str | None:
+        """Return the hash of the live episode DB without exposing DB contents."""
+
+        if self._orchestrator is None:
+            raise RuntimeError("environment must be reset before reading its DB hash")
+        return self._orchestrator.environment.get_db_hash()
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,6 +118,7 @@ class TauEnvConfig:
     environment_transform: EnvironmentTransform | None = None
     perturbation_name: str | None = None
     task_data: dict[str, Any] | None = None
+    database_override: Any | None = None
 
     def __post_init__(self) -> None:
         if not self.domain.strip():
@@ -146,6 +163,7 @@ class TauReset:
     observation: str
     info: dict[str, Any]
     evaluator_info: dict[str, Any]
+    initial_db_hash: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -158,6 +176,7 @@ class TauTransition:
     truncated: bool
     info: dict[str, Any]
     evaluator_info: dict[str, Any]
+    db_hash: str | None = None
 
     @property
     def done(self) -> bool:
@@ -184,6 +203,7 @@ class TauEnv:
                 if config.task_data is not None
                 else None
             ),
+            database_override=config.database_override,
         )
         self._has_reset = False
         self._done = False
@@ -238,6 +258,7 @@ class TauEnv:
             observation=observation,
             info=info,
             evaluator_info=evaluator_info,
+            initial_db_hash=self._env.get_db_hash(),
         )
 
     def step(self, action: str) -> TauTransition:
@@ -300,6 +321,7 @@ class TauEnv:
             truncated=truncated,
             info=info,
             evaluator_info=evaluator_info,
+            db_hash=self._env.get_db_hash(),
         )
 
     @staticmethod

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 from agent_rl.data.synthetic.audit import (
     AuditStatus,
     SyntheticAuditConfig,
+    _near_duplicates,
     audit_synthetic_corpus,
 )
 from agent_rl.data.synthetic.fingerprint import semantic_fingerprint
@@ -14,7 +16,6 @@ from agent_rl.data.synthetic.generators.common import (
     make_candidate,
 )
 from agent_rl.data.synthetic.schema import (
-    OverlapMetadata,
     SyntheticSplit,
     SyntheticTaskRecord,
     VerificationMetadata,
@@ -59,14 +60,10 @@ def _record(
             initial_db_hash=f"before-{index}",
             target_db_hash=f"after-{index}",
         ),
-        overlap=OverlapMetadata(
-            passed=True,
-            exact_match=False,
-            same_action_arguments=False,
-            nearest_task_id=None,
-            nearest_similarity=0.1,
-            threshold=0.82,
-        ),
+        metadata={
+            "policy": {"difficulty": "simple"},
+            "policy_validation": {"passed": True},
+        },
     )
 
 
@@ -90,7 +87,7 @@ def _write_corpus(root: Path, records: list[SyntheticTaskRecord]) -> None:
         json.dump(manifest, stream)
 
 
-def test_audit_accepts_isolated_diverse_records_with_long_horizon_warning(
+def test_audit_rejects_corpus_without_long_horizon_coverage(
     tmp_path: Path,
 ) -> None:
     records = [
@@ -109,17 +106,20 @@ def test_audit_accepts_isolated_diverse_records_with_long_horizon_warning(
             corpus_root=tmp_path,
             domains=("airline",),
             min_split_size=2,
+            min_templates_per_domain=2,
             max_near_duplicate_record_fraction=1.0,
         )
     )
 
-    assert report.status is AuditStatus.WARN
+    assert report.status is AuditStatus.FAIL
     assert report.domains["airline"].entity_leakage == []
-    assert any(
-        finding.code == "multi_action_coverage"
-        and finding.status is AuditStatus.WARN
+    failed_codes = {
+        finding.code
         for finding in report.findings
-    )
+        if finding.status is AuditStatus.FAIL
+    }
+    assert "multi_action_coverage" in failed_codes
+    assert "difficulty_coverage" in failed_codes
 
 
 def test_audit_fails_entity_leakage_and_template_concentration(
@@ -154,3 +154,94 @@ def test_audit_fails_entity_leakage_and_template_concentration(
     assert "entity_isolation" in failed_codes
     assert "template_coverage" in failed_codes
     assert "template_concentration" in failed_codes
+
+
+def test_near_duplicate_gate_ignores_same_template_across_entities() -> None:
+    left = _record(
+        index=1,
+        split=SyntheticSplit.TRAIN,
+        template="shared-template",
+        entity="entity-1",
+    )
+    right = _record(
+        index=2,
+        split=SyntheticSplit.VALIDATION,
+        template="shared-template",
+        entity="entity-2",
+    )
+
+    pair_count, record_fraction, examples = _near_duplicates(
+        [left, right],
+        threshold=0.0,
+    )
+
+    assert pair_count == 0
+    assert record_fraction == 0.0
+    assert examples == []
+
+
+def test_near_duplicate_gate_ignores_shared_support_component() -> None:
+    left = _record(
+        index=3,
+        split=SyntheticSplit.TRAIN,
+        template="single-fault",
+        entity="entity-3",
+    )
+    right = _record(
+        index=4,
+        split=SyntheticSplit.VALIDATION,
+        template="composed-fault",
+        entity="entity-4",
+    )
+    left = replace(
+        left,
+        metadata={
+            **left.metadata,
+            "policy": {
+                **left.metadata["policy"],
+                "support_cases": ["broken_apn"],
+            },
+        },
+    )
+    right = replace(
+        right,
+        metadata={
+            **right.metadata,
+            "policy": {
+                **right.metadata["policy"],
+                "support_cases": ["broken_apn", "slow_vpn"],
+            },
+        },
+    )
+
+    pair_count, record_fraction, _ = _near_duplicates(
+        [left, right],
+        threshold=0.0,
+    )
+
+    assert pair_count == 0
+    assert record_fraction == 0.0
+
+
+def test_near_duplicate_gate_still_compares_unrelated_templates() -> None:
+    left = _record(
+        index=5,
+        split=SyntheticSplit.TRAIN,
+        template="template-a",
+        entity="entity-5",
+    )
+    right = _record(
+        index=6,
+        split=SyntheticSplit.VALIDATION,
+        template="template-b",
+        entity="entity-6",
+    )
+
+    pair_count, record_fraction, examples = _near_duplicates(
+        [left, right],
+        threshold=0.0,
+    )
+
+    assert pair_count == 1
+    assert record_fraction == 1.0
+    assert len(examples) == 1
