@@ -7,6 +7,9 @@ max_steps: 50
 user_llm: deepseek/deepseek-v4-flash
 user_llm_args:
   temperature: 0.0
+evaluator_llm: deepseek/deepseek-v4-pro
+evaluator_llm_args:
+  temperature: 0.0
 model: Qwen3-8B
 base_url: http://127.0.0.1:8000/v1
 api_key: EMPTY

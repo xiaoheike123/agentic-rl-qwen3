@@ -8,3 +8,6 @@ max_steps: 30
 user_llm: deepseek/deepseek-v4-flash
 user_llm_args:
   temperature: 0.0
+evaluator_llm: deepseek/deepseek-v4-pro
+evaluator_llm_args:
+  temperature: 0.0

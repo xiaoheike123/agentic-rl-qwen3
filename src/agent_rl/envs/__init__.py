@@ -13,6 +13,7 @@ from .tau_env import (
     TauInfrastructureError,
     TauReset,
     TauTransition,
+    configure_tau_nl_evaluator,
 )
 
 __all__ = [
@@ -24,6 +25,7 @@ __all__ = [
     "TauInfrastructureError",
     "TauReset",
     "TauTransition",
+    "configure_tau_nl_evaluator",
     "is_tau_control_tool",
     "to_tau_action",
 ]

@@ -199,6 +199,10 @@ def main() -> None:
             max_steps=int(config.get("max_steps", 50)),
             user_llm=config["user_llm"],
             user_llm_args=dict(config.get("user_llm_args") or {}),
+            evaluator_llm=config.get(
+                "evaluator_llm", "deepseek/deepseek-v4-pro"
+            ),
+            evaluator_llm_args=dict(config.get("evaluator_llm_args") or {}),
             all_messages_as_observation=True,
         ),
     )

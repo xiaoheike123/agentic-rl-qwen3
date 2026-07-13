@@ -5,6 +5,9 @@
     user_llm: deepseek/deepseek-v4-flash
     user_llm_args:
       temperature: 0.0
+    evaluator_llm: deepseek/deepseek-v4-pro
+    evaluator_llm_args:
+      temperature: 0.0
     all_messages_as_observation: false
     tool_parser: hermes
     outcome_weight: 1.0

@@ -158,6 +158,10 @@ def _prepare_files(config: ExperimentConfig) -> tuple[Path, Path, Path]:
                 "max_steps": int(config.environment.get("max_steps", 30)),
                 "user_llm": config.environment["user_llm"],
                 "user_llm_args": dict(config.environment.get("user_llm_args") or {}),
+                "evaluator_llm": config.environment["evaluator_llm"],
+                "evaluator_llm_args": dict(
+                    config.environment.get("evaluator_llm_args") or {}
+                ),
                 "all_messages_as_observation": bool(
                     config.environment.get("all_messages_as_observation", False)
                 ),

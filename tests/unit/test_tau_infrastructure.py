@@ -1,3 +1,5 @@
+import pickle
+
 import pytest
 
 import agent_rl.envs.tau_env as tau_env_module
@@ -6,6 +8,48 @@ from agent_rl.envs.tau_env import (
     TauEnvConfig,
     TauInfrastructureError,
 )
+
+
+def test_infrastructure_error_round_trips_through_pickle() -> None:
+    original = TauInfrastructureError(
+        stage="reset",
+        domain="airline",
+        task_id="task-1",
+    )
+
+    restored = pickle.loads(pickle.dumps(original))
+
+    assert isinstance(restored, TauInfrastructureError)
+    assert restored.stage == "reset"
+    assert restored.domain == "airline"
+    assert restored.task_id == "task-1"
+    assert str(restored) == str(original)
+
+
+def test_env_configures_deepseek_nl_evaluator(monkeypatch) -> None:
+    monkeypatch.setattr(
+        tau_env_module,
+        "_TransformableAgentGymEnv",
+        _FakeAgentGymEnv,
+    )
+
+    TauEnv(
+        TauEnvConfig(
+            domain="airline",
+            task_id="task-1",
+            evaluator_llm="deepseek/deepseek-v4-pro",
+            evaluator_llm_args={"temperature": 0.0},
+        )
+    )
+
+    assert (
+        tau_env_module.evaluator_nl_assertions.DEFAULT_LLM_NL_ASSERTIONS
+        == "deepseek/deepseek-v4-pro"
+    )
+    assert (
+        tau_env_module.evaluator_nl_assertions.DEFAULT_LLM_NL_ASSERTIONS_ARGS
+        == {"temperature": 0.0}
+    )
 
 
 class _FakeAgentGymEnv:
@@ -113,3 +157,23 @@ def test_step_accepts_empty_observation_after_valid_termination(monkeypatch):
     assert transition.done is True
     assert transition.observation == ""
     assert transition.reward == 1.0
+
+
+def test_step_wraps_evaluator_api_failure_for_episode_retry(monkeypatch):
+    class FailingAgentGymEnv(_FakeAgentGymEnv):
+        def step(self, action):
+            raise RuntimeError("judge API unavailable")
+
+    monkeypatch.setattr(
+        tau_env_module,
+        "_TransformableAgentGymEnv",
+        FailingAgentGymEnv,
+    )
+    env = TauEnv(TauEnvConfig(domain="airline", task_id="task-1"))
+    env.reset()
+
+    with pytest.raises(TauInfrastructureError, match="during step") as caught:
+        env.step("hello")
+
+    assert caught.value.__cause__ is not None
+    assert str(caught.value.__cause__) == "judge API unavailable"

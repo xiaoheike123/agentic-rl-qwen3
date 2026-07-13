@@ -83,6 +83,8 @@ class TauAgentLoopSettings:
     max_steps: int = 30
     user_llm: str = "deepseek/deepseek-v4-flash"
     user_llm_args: dict[str, Any] | None = None
+    evaluator_llm: str = "deepseek/deepseek-v4-pro"
+    evaluator_llm_args: dict[str, Any] | None = None
     all_messages_as_observation: bool = False
     tool_parser: str = "hermes"
     outcome_weight: float = 1.0
@@ -203,6 +205,8 @@ class TauAgentLoop(AgentLoopBase):
                 max_steps=self.settings.max_steps,
                 user_llm=self.settings.user_llm,
                 user_llm_args=dict(self.settings.user_llm_args or {}),
+                evaluator_llm=self.settings.evaluator_llm,
+                evaluator_llm_args=dict(self.settings.evaluator_llm_args or {}),
                 all_messages_as_observation=self.settings.all_messages_as_observation,
                 task_data=synthetic_task,
                 database_override=database_override,

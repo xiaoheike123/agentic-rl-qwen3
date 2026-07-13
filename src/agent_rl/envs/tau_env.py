@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from tau2.data_model.tasks import Task
+from tau2.evaluator import evaluator_nl_assertions
 from tau2.gym.gym_agent import AgentGymEnv
 from tau2.registry import registry
 from tau2.utils.tools import parse_action_string
@@ -23,12 +24,23 @@ PUBLIC_TAU_INFO_KEYS = frozenset({"policy", "tools"})
 EVALUATOR_TAU_INFO_KEYS = frozenset({"simulation_run", "reward_info"})
 
 
+def configure_tau_nl_evaluator(
+    model: str,
+    model_args: dict[str, Any] | None,
+) -> None:
+    """Configure tau2's process-global NL assertion judge for this worker."""
+
+    evaluator_nl_assertions.DEFAULT_LLM_NL_ASSERTIONS = model
+    evaluator_nl_assertions.DEFAULT_LLM_NL_ASSERTIONS_ARGS = deepcopy(
+        model_args or {}
+    )
+
+
 class TauInfrastructureError(RuntimeError):
     """Raised when tau2 cannot produce a valid episode state."""
 
     def __init__(
         self,
-        *,
         stage: str,
         domain: str,
         task_id: str,
@@ -40,6 +52,11 @@ class TauInfrastructureError(RuntimeError):
             "tau2 infrastructure failure during "
             f"{stage} (domain={domain!r}, task_id={task_id!r})"
         )
+
+    def __reduce__(self) -> tuple[type[TauInfrastructureError], tuple[str, str, str]]:
+        """Reconstruct the exception across multiprocessing and Ray boundaries."""
+
+        return type(self), (self.stage, self.domain, self.task_id)
 
 
 def _has_simulation_run(evaluator_info: dict[str, Any]) -> bool:
@@ -148,6 +165,8 @@ class TauEnvConfig:
     solo_mode: bool = False
     user_llm: str = "deepseek/deepseek-v4-flash"
     user_llm_args: dict[str, Any] | None = None
+    evaluator_llm: str = "deepseek/deepseek-v4-pro"
+    evaluator_llm_args: dict[str, Any] | None = None
     all_messages_as_observation: bool = True
     task_transform: TaskTransform | None = None
     environment_transform: EnvironmentTransform | None = None
@@ -170,6 +189,14 @@ class TauEnvConfig:
 
         if self.user_llm_args is not None and not isinstance(self.user_llm_args, dict):
             raise TypeError("user_llm_args must be a dictionary or None")
+
+        if not self.evaluator_llm.strip():
+            raise ValueError("evaluator_llm must not be empty")
+
+        if self.evaluator_llm_args is not None and not isinstance(
+            self.evaluator_llm_args, dict
+        ):
+            raise TypeError("evaluator_llm_args must be a dictionary or None")
 
         if self.task_transform is not None and not callable(self.task_transform):
             raise TypeError("task_transform must be callable or None")
@@ -223,6 +250,10 @@ class TauEnv:
 
     def __init__(self, config: TauEnvConfig) -> None:
         self.config = config
+        configure_tau_nl_evaluator(
+            config.evaluator_llm,
+            config.evaluator_llm_args,
+        )
         self._env = _TransformableAgentGymEnv(
             domain=config.domain,
             task_id=config.task_id,
@@ -323,7 +354,14 @@ class TauEnv:
             action_parse_valid = False
             action_parse_error = f"{type(error).__name__}: {error}"
 
-        observation, reward, terminated, truncated, info = self._env.step(action)
+        try:
+            observation, reward, terminated, truncated, info = self._env.step(action)
+        except Exception as error:
+            raise TauInfrastructureError(
+                stage="step",
+                domain=self.config.domain,
+                task_id=self.config.task_id,
+            ) from error
 
         self._validate_observation(observation)
 
