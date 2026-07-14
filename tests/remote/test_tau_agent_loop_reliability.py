@@ -137,4 +137,4 @@ def test_tau_worker_forwards_rollout_index(monkeypatch):
     )
     assert captured["rollout_n"] == 3
     assert captured["trajectory_step"] == 7
-    assert captured["validate"] is False
+    assert captured["trajectory_validate"] is False

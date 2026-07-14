@@ -217,6 +217,10 @@ def build_verl_command(config: ExperimentConfig) -> list[str]:
             model.get("lora_target_modules", "all-linear"),
         ),
         _override(
+            "actor_rollout_ref.model.lora.merge",
+            model.get("lora_merge", False),
+        ),
+        _override(
             "actor_rollout_ref.model.enable_gradient_checkpointing",
             model.get("gradient_checkpointing", False),
         ),

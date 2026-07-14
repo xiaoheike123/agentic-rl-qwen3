@@ -29,7 +29,7 @@ class TauAgentLoopWorker(AgentLoopWorker):
 
         kwargs["rollout_n"] = int(trajectory["rollout_n"])
         kwargs["trajectory_step"] = int(trajectory["step"])
-        kwargs["validate"] = bool(trajectory["validate"])
+        kwargs["trajectory_validate"] = bool(trajectory["validate"])
         return await super()._run_agent_loop(
             sampling_params,
             trajectory,

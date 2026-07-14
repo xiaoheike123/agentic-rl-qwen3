@@ -2,7 +2,11 @@ import pytest
 
 from agent_rl.data.schemas import EpisodeRecord, ToolCallRecord, TurnRecord
 from agent_rl.rewards.environment_checks import collect_tool_executions
-from agent_rl.rollout.episode_worker import EpisodeDataError, _hydrate_tool_results
+from agent_rl.rollout.episode_worker import (
+    EpisodeDataError, 
+    _collect_tool_results,
+    _hydrate_tool_results,
+)
 
 
 def _episode_with_call(*, name: str, is_control: bool) -> EpisodeRecord:
@@ -68,3 +72,49 @@ def test_missing_environment_tool_result_remains_an_error() -> None:
             {"termination_reason": "agent_stop", "messages": []},
             strict=True,
         )
+def test_identical_duplicate_tool_results_are_deduplicated() -> None:
+    message = {
+        "role": "tool",
+        "requestor": "assistant",
+        "id": "call_15",
+        "content": {"status": "ok"},
+        "error": False,
+    }
+
+    results = _collect_tool_results(
+        {"messages": [message, dict(message)]}
+    )
+
+    assert results == {
+        "call_15": {
+            "result": {"status": "ok"},
+            "error": None,
+        }
+    }
+
+
+def test_conflicting_duplicate_tool_results_are_rejected() -> None:
+    simulation_run = {
+        "messages": [
+            {
+                "role": "tool",
+                "requestor": "assistant",
+                "id": "call_15",
+                "content": {"status": "ok"},
+                "error": False,
+            },
+            {
+                "role": "tool",
+                "requestor": "assistant",
+                "id": "call_15",
+                "content": {"status": "different"},
+                "error": False,
+            },
+        ]
+    }
+
+    with pytest.raises(
+        EpisodeDataError,
+        match="conflicting tool results",
+    ):
+        _collect_tool_results(simulation_run)

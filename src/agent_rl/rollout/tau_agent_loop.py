@@ -19,6 +19,7 @@ from agent_rl.data.schemas import (
 )
 from agent_rl.data.synthetic.training_db import load_training_database
 from agent_rl.envs.action_parser import (
+    ActionFormatError,
     ModelToolCall,
     is_tau_control_tool,
     to_tau_action,
@@ -313,15 +314,68 @@ class TauAgentLoop(AgentLoopBase):
                     generated_ids,
                     skip_special_tokens=True,
                 ).strip()
-            model_calls = tuple(
-                ModelToolCall(
-                    name=call.name,
-                    arguments=_decode_arguments(call.arguments),
-                    tool_call_id=call.tool_call_id or f"call_{len(episode.turns)}",
+            try:
+                model_calls = tuple(
+                    ModelToolCall(
+                        name=call.name,
+                        arguments=_decode_arguments(call.arguments),
+                        tool_call_id=(
+                            call.tool_call_id or f"call_{len(episode.turns)}"
+                        ),
+                    )
+                    for call in parsed_calls
                 )
-                for call in parsed_calls
-            )
-            action = to_tau_action(content=content, tool_calls=model_calls)
+                action = to_tau_action(
+                    content=content,
+                    tool_calls=model_calls,
+                )
+            except ActionFormatError as error:
+                attempted_turns = len(turn_token_spans)
+
+                episode.reward = RewardRecord(
+                    outcome=0.0,
+                    process=0.0,
+                    total=0.0,
+                )
+                episode.fail(
+                    error=f"ActionFormatError: {error}",
+                    termination_reason="invalid_action",
+                )
+
+                logger.warning(
+                    "terminating invalid policy trajectory: "
+                    "domain=%s task_id=%s sample_index=%d "
+                    "attempted_turns=%d token_ids=%s error=%s",
+                    domain,
+                    task_id,
+                    sample_index,
+                    attempted_turns,
+                    generated_ids[:16],
+                    error,
+                )
+
+                return self._build_policy_failure_output(
+                    episode=episode,
+                    prompt_ids=prompt_ids,
+                    response_ids=response_ids,
+                    response_mask=response_mask,
+                    response_logprobs=response_logprobs,
+                    metrics=metrics,
+                    group_id=group_id,
+                    sample_index=sample_index,
+                    episode_seed=episode_seed,
+                    domain=domain,
+                    task_id=task_id,
+                    database_source=database_source,
+                    context_rotations=context_rotations,
+                    attempted_turns=attempted_turns,
+                    invalid_action_error=str(error),
+                    invalid_token_ids=generated_ids,
+                    invalid_decoded_output=self.tokenizer.decode(
+                        generated_ids,
+                        skip_special_tokens=False,
+                    ),
+                )
 
             tool_records = [
                 ToolCallRecord(
@@ -485,6 +539,9 @@ class TauAgentLoop(AgentLoopBase):
                     "tau_invalid_action_count": count_checks(
                         "action_parse", passed=False
                     ),
+                    "tau_invalid_action_error": "",
+                    "tau_invalid_token_ids": "",
+                    "tau_invalid_decoded_output": "",
                     "tau_tool_error_count": count_checks(
                         "tool_execution", passed=False
                     ),
@@ -504,6 +561,78 @@ class TauAgentLoop(AgentLoopBase):
             },
         )
 
+    def _build_policy_failure_output(
+        self,
+        *,
+        episode: EpisodeRecord,
+        prompt_ids: list[int],
+        response_ids: list[int],
+        response_mask: list[int],
+        response_logprobs: list[float],
+        metrics: AgentLoopMetrics,
+        group_id: str,
+        sample_index: int,
+        episode_seed: int | None,
+        domain: str,
+        task_id: str,
+        database_source: str,
+        context_rotations: int,
+        attempted_turns: int,
+        invalid_action_error: str,
+        invalid_token_ids: list[int],
+        invalid_decoded_output: str,
+    ) -> AgentLoopOutput:
+        response_limit = self.rollout_config.response_length
+
+        kept_response_ids = response_ids[:response_limit]
+        kept_response_mask = response_mask[:response_limit]
+        kept_response_logprobs = response_logprobs[:response_limit]
+
+        return AgentLoopOutput(
+            prompt_ids=prompt_ids,
+            response_ids=kept_response_ids,
+            response_mask=kept_response_mask,
+            response_logprobs=kept_response_logprobs,
+            reward_score=0.0,
+            num_turns=attempted_turns,
+            metrics=metrics,
+            extra_fields={
+                "tau_hindsight_evidence": [0.0] * len(kept_response_ids),
+                "reward_extra_info": {
+                    "tau_episode_id": episode.episode_id,
+                    "tau_group_id": group_id,
+                    "tau_sample_index": sample_index,
+                    "tau_seed": episode_seed,
+                    "tau_domain": domain,
+                    "tau_task_id": task_id,
+                    "tau_success": False,
+                    "tau_outcome_reward": 0.0,
+                    "tau_process_reward": 0.0,
+                    "tau_total_turns": attempted_turns,
+                    "tau_prompt_tokens": len(prompt_ids),
+                    "tau_response_tokens": sum(kept_response_mask),
+                    "tau_tool_call_count": sum(
+                        len(turn.tool_calls) for turn in episode.turns
+                    ),
+                    "tau_hit_max_turns": (
+                        attempted_turns >= self.settings.max_steps
+                    ),
+                    "tau_retained_credit_turns": 0,
+                    "tau_context_rotations": context_rotations,
+                    "tau_database_source": database_source,
+                    "tau_termination_reason": episode.termination_reason,
+                    "tau_invalid_action_count": 1,
+                    "tau_invalid_action_error": invalid_action_error,
+                    "tau_invalid_token_ids": json.dumps(invalid_token_ids),
+                    "tau_invalid_decoded_output": invalid_decoded_output,
+                    "tau_tool_error_count": 0,
+                    "tau_missing_result_count": 0,
+                    "tau_recovery_count": 0,
+                    "tau_unresolved_error_count": 0,
+                    "tau_abnormal_truncation_count": 0,
+                },
+            },
+        )
     def _finalize_episode(
         self,
         episode: EpisodeRecord,
@@ -561,11 +690,25 @@ def _required_string(values: dict[str, Any], key: str) -> str:
     return value
 
 
-def _decode_arguments(arguments: str) -> dict[str, Any]:
+def _decode_arguments(arguments: str | dict[str, Any]) -> dict[str, Any]:
+    if isinstance(arguments, dict):
+        return dict(arguments)
+
+    if not isinstance(arguments, str):
+        raise ActionFormatError(
+            "tool arguments must be a JSON string or object"
+        )
+
     try:
         decoded = json.loads(arguments)
     except json.JSONDecodeError as error:
-        raise ValueError(f"model emitted invalid tool JSON: {arguments}") from error
+        raise ActionFormatError(
+            f"model emitted invalid tool JSON: {arguments}"
+        ) from error
+
     if not isinstance(decoded, dict):
-        raise ValueError("tool arguments must decode to an object")
+        raise ActionFormatError(
+            "tool arguments must decode to an object"
+        )
+
     return decoded
