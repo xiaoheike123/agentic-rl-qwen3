@@ -1,0 +1,12 @@
+domain: airline
+train_split: train
+evaluation_split: test
+max_steps: 200
+solo_mode: false
+user_llm: deepseek/deepseek-v4-pro
+user_llm_args:
+  temperature: 0.0
+evaluator_llm: deepseek/deepseek-v4-pro
+evaluator_llm_args:
+  temperature: 0.0
+all_messages_as_observation: false

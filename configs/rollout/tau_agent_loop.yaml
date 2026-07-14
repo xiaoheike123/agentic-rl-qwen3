@@ -1,7 +1,7 @@
 - name: tau_agent
   _target_: agent_rl.rollout.tau_agent_loop.TauAgentLoop
   settings:
-    max_steps: 16
+    max_steps: 64
     user_llm: deepseek/deepseek-v4-pro
     user_llm_args:
       temperature: 0.0

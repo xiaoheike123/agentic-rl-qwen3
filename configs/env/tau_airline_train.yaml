@@ -1,7 +1,7 @@
 domain: airline
 train_split: train
 evaluation_split: test
-max_steps: 16
+max_steps: 64
 solo_mode: false
 user_llm: deepseek/deepseek-v4-pro
 user_llm_args:

@@ -37,7 +37,8 @@ the rollout cache does not preserve the pre-update adapter.
 - PPO epochs 1; initial total epochs 1.
 - Learning rate 1e-5; gradient clipping 1.0; KL coefficient 0.001.
 - Temperature 0.8; top-p 0.95.
-- Maximum 16 agent turns and 256 generated tokens per turn.
+- Maximum 64 agent turns during training and 256 generated tokens per turn.
+- Frozen E0 and checkpoint evaluation use tau2's 200-step text-run limit.
 - 16K total prompt/response budget.
 
 ## Experiments

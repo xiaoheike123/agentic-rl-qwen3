@@ -3,7 +3,7 @@ evaluation_only: true
 evaluation_split: test
 evaluation_trials: 1
 model_config: configs/model/qwen3_8b_lora.yaml
-env_config: configs/env/tau_airline.yaml
+env_config: configs/env/tau_airline_eval.yaml
 algorithm_config: configs/algorithm/grpo_sequence.yaml
 rollout_config: configs/rollout/sync.yaml
 reward_config: configs/reward/outcome.yaml

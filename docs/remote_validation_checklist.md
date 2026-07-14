@@ -3,6 +3,10 @@
 Run all commands from `/root/autodl-tmp/agent-rl-qwen3` in the unified training
 environment.
 
+Training manifests use `configs/env/tau_airline_train.yaml` with a 64-turn
+limit. Frozen E0 and checkpoint evaluation use
+`configs/env/tau_airline_eval.yaml` with tau2's 200-step text-run limit.
+
 ## 1. Sync and activate
 
 ```bash

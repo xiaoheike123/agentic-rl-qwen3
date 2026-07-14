@@ -15,6 +15,9 @@ LORA_TARGETS = {
     "down_proj",
 }
 
+TRAIN_MAX_STEPS = 64
+EVALUATION_MAX_STEPS = 200
+
 
 def validate_experiment_config(config: ExperimentConfig) -> None:
     evaluation_only = bool(config.raw.get("evaluation_only", False))
@@ -24,8 +27,16 @@ def validate_experiment_config(config: ExperimentConfig) -> None:
         raise ValueError("official airline train split is required")
     if config.environment.get("evaluation_split") != "test":
         raise ValueError("official airline test split is required")
-    if int(config.environment.get("max_steps", 0)) != 16:
-        raise ValueError("max agent turns must be 16")
+    expected_max_steps = (
+        EVALUATION_MAX_STEPS if evaluation_only else TRAIN_MAX_STEPS
+    )
+    actual_max_steps = int(config.environment.get("max_steps", 0))
+    if actual_max_steps != expected_max_steps:
+        run_kind = "evaluation" if evaluation_only else "training"
+        raise ValueError(
+            f"formal {run_kind} max agent turns must be {expected_max_steps}, "
+            f"got {actual_max_steps}"
+        )
     if int(config.rollout.get("max_action_tokens", 0)) != 256:
         raise ValueError("per-turn generation must be capped at 256 tokens")
     if int(config.model["max_prompt_length"]) + int(

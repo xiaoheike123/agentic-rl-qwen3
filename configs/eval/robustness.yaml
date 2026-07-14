@@ -3,7 +3,7 @@ manifest: data/robustness/airline_reviewed.jsonl
 output_dir: outputs/robustness/airline
 trials: 4
 seed: 42
-max_steps: 16
+max_steps: 200
 user_llm: deepseek/deepseek-v4-pro
 user_llm_args:
   temperature: 0.0

@@ -2,6 +2,7 @@ from pathlib import Path
 
 from agent_rl.trainer import verl_entry
 from agent_rl.trainer.config_adapter import load_experiment_config
+from agent_rl.trainer.preflight import EVALUATION_MAX_STEPS, TRAIN_MAX_STEPS
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -31,6 +32,18 @@ def test_training_uses_group_four_without_test_validation(monkeypatch) -> None:
     assert "trainer.val_before_train=false" in command
     assert "trainer.test_freq=-1" in command
     assert "trainer.val_only=true" not in command
+
+
+def test_training_and_evaluation_use_distinct_step_limits() -> None:
+    train_config = load_experiment_config(
+        PROJECT_ROOT / "configs" / "train" / "e1_grpo_sequence.yaml"
+    )
+    eval_config = load_experiment_config(
+        PROJECT_ROOT / "configs" / "train" / "e0_base_eval.yaml"
+    )
+
+    assert train_config.environment["max_steps"] == TRAIN_MAX_STEPS == 64
+    assert eval_config.environment["max_steps"] == EVALUATION_MAX_STEPS == 200
 
 
 def test_e4_uses_sequence_hindsight_estimator(monkeypatch) -> None:
