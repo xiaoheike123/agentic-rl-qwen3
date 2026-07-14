@@ -1,11 +1,8 @@
 experiment: E5
-optional: true
-exploratory: true
-run_condition: pre_registered_resource_availability_only
 model_config: configs/model/qwen3_8b_lora.yaml
 env_config: configs/env/tau_airline_train.yaml
 algorithm_config: configs/algorithm/grpo_balanced.yaml
 rollout_config: configs/rollout/sync.yaml
-reward_config: configs/reward/outcome.yaml
+reward_config: configs/reward/environment_process.yaml
 credit_config: configs/credit/hindsight_turn.yaml
 runtime_config: configs/runtime/pro6000_single_gpu.yaml

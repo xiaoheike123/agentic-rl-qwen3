@@ -9,7 +9,7 @@ verl, vLLM, and a DeepSeek V4 Pro user simulator.
 - Training data: the 30 official tau2 airline `train` task IDs.
 - Final evaluation: the 20 disjoint official airline `test` task IDs.
 - Final trials: four fixed seeds per test task, 80 episodes per checkpoint.
-- Training: independent one-epoch LoRA runs from the same Qwen3-8B base.
+- Training: independent 75-step LoRA-GRPO runs from the same Qwen3-8B base.
 - GRPO group size: `G=4`, subject to an eight-task preflight diagnostic.
 - Official metric: tau2 `pass^1` through `pass^4`, plus success and efficiency diagnostics.
 
@@ -24,14 +24,13 @@ split, and test results are not used to decide whether to train another epoch.
 | E0 | none | none | base-model final evaluation |
 | E1 | sequence | outcome | none |
 | E2 | balanced | outcome | none |
-| E3 | sequence | outcome + environment process | none |
-| E4 | sequence | outcome | hindsight turn credit |
-| E5 | balanced | outcome | hindsight turn credit; optional |
+| E3 | sequence | outcome + environment process | ablation template |
+| E4 | sequence | outcome | ablation template |
+| E5 | balanced | outcome + light process | hindsight turn credit |
 
-E5 is pre-declared exploratory and may run only when the compute budget was
-reserved in advance. It must not be triggered by looking at official test
-scores. Every trained experiment starts independently from the same base model;
-E2 is not initialized from E1.
+The formal three-run plan is E1, E2, and E5. E3 and E4 remain available as
+ablation templates. Every trained experiment starts independently from the same
+base model; E2 is not initialized from E1.
 
 ## Main commands
 
@@ -39,8 +38,11 @@ E2 is not initialized from E1.
 # Eight train tasks x four rollouts, one update.
 bash scripts/train/train_experiment.sh configs/train/g4_preflight.yaml
 
-# Formal E1 after the G=4 decision.
-bash scripts/train/train_experiment.sh configs/train/e1_grpo_sequence.yaml
+# Formal E1 phase A: train from scratch to step 30.
+bash scripts/train/run_formal_phase.sh configs/train/e1_grpo_sequence.yaml 30
+
+# Formal E1 phase B: resume from step 30 and train to step 75.
+bash scripts/train/run_formal_phase.sh configs/train/e1_grpo_sequence.yaml 75
 
 # Base-model final evaluation (80 pre-expanded rows).
 bash scripts/train/train_experiment.sh configs/train/e0_base_eval.yaml

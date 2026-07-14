@@ -34,25 +34,38 @@ the rollout cache does not preserve the pre-update adapter.
 - Targets: q/k/v/o and gate/up/down projections.
 - One RTX PRO 6000 96GB, tensor parallel size 1.
 - 30 prompts, G=4, 120 trajectories per epoch.
-- PPO epochs 1; initial total epochs 1.
+- PPO epochs 1; formal training target 75 global steps.
 - Learning rate 1e-5; gradient clipping 1.0; KL coefficient 0.001.
 - Temperature 0.8; top-p 0.95.
 - Maximum 64 agent turns during training and 256 generated tokens per turn.
 - Frozen E0 and checkpoint evaluation use tau2's 200-step text-run limit.
 - 16K total prompt/response budget.
 
+## Checkpoint schedule
+
+Formal training is launched in two phases so that checkpoints are written only
+at the intended decision points:
+
+- Phase A: train from scratch to global step 30 and save step 30.
+- Phase B: resume from step 30, train to global step 75, and save step 75.
+
+Use `scripts/train/run_formal_phase.sh` for both phases. On the default 100GB
+AutoDL data disk, `CKPT_KEEP=1` is the safe setting because one verl training
+checkpoint is roughly one full 8B-model training state. Set `CKPT_KEEP=2` only
+after expanding the disk or moving the step-30 checkpoint elsewhere.
+
 ## Experiments
 
 1. E0: frozen base-model test evaluation.
 2. E1: outcome GRPO with sequence aggregation.
 3. E2: outcome GRPO with balanced aggregation.
-4. E3: sequence GRPO with environment-verifiable process reward.
-5. E4: sequence GRPO with hindsight turn credit and outcome scalar reward.
-6. E5: pre-declared exploratory balanced aggregation plus hindsight credit.
+4. E5: balanced aggregation plus lightweight environment-process reward and
+   hindsight turn credit.
 
-E1-E4 are independent runs from the identical base model and fixed data order.
-E5 is gated only by pre-registered compute availability, never by official test
-scores. Using test results to decide whether to run E5 would turn the same test
+E1, E2, and E5 are the three formal training runs. They are independent runs
+from the identical base model and fixed data order. E3 and E4 configs are kept
+as ablation templates, but they are not part of the default three-run plan.
+Using test results to decide which extra runs to launch would turn the same test
 set into a tuning set. Async rollout is a systems optimization and must not
 change policy version within one collected batch.
 

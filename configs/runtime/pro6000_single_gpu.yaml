@@ -10,12 +10,12 @@ ppo_epochs: 1
 optimizer_lr: 1.0e-5
 grad_clip: 1.0
 kl_loss_coef: 0.001
-total_epochs: 1
-save_freq: 1
+total_epochs: 75
+save_freq: 75
 test_freq: -1
 val_before_train: false
 resume_mode: auto
-max_actor_ckpt_to_keep: 2
+max_actor_ckpt_to_keep: 1
 seed: 42
 n_gpus_per_node: 1
 nnodes: 1
