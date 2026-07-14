@@ -13,6 +13,54 @@ from verl.trainer.ppo.core_algos import register_adv_est
 from agent_rl.trainer.credit_encoding import decode_centered_evidence
 
 
+def _install_trainable_only_optimizer_guard() -> None:
+    """Keep frozen base weights out of the FSDP optimizer parameter groups."""
+
+    from verl.workers.config import optimizer as optimizer_module
+    from verl.workers.engine.fsdp.transformer_impl import FSDPEngine
+
+    if getattr(optimizer_module.build_optimizer, "_agent_rl_guarded", False):
+        return
+
+    original_build_optimizer = optimizer_module.build_optimizer
+    original_engine_build_optimizer = FSDPEngine._build_optimizer
+
+    def build_optimizer(parameters, config):
+        trainable = [parameter for parameter in parameters if parameter.requires_grad]
+        if not trainable:
+            raise RuntimeError("optimizer received no trainable parameters")
+        return original_build_optimizer(trainable, config)
+
+    build_optimizer._agent_rl_guarded = True
+    optimizer_module.build_optimizer = build_optimizer
+
+    def engine_build_optimizer(self, module):
+        trainable = [
+            (name, parameter)
+            for name, parameter in module.named_parameters()
+            if parameter.requires_grad
+        ]
+        if self.model_config.lora_rank > 0:
+            unexpected = [name for name, _ in trainable if "lora_" not in name]
+            if unexpected:
+                raise RuntimeError(
+                    "LoRA optimizer guard found non-LoRA trainable parameters: "
+                    + ", ".join(unexpected[:8])
+                )
+        logger = __import__("logging").getLogger(__name__)
+        logger.info(
+            "LORA_OPTIMIZER_AUDIT trainable_tensors=%d trainable_parameters=%d",
+            len(trainable),
+            sum(parameter.numel() for _, parameter in trainable),
+        )
+        return original_engine_build_optimizer(self, module)
+
+    FSDPEngine._build_optimizer = engine_build_optimizer
+
+
+_install_trainable_only_optimizer_guard()
+
+
 def _group_relative_scalars(
     token_level_rewards: torch.Tensor,
     index: np.ndarray,
@@ -196,6 +244,42 @@ def compute_tau_hindsight_balanced_grpo(
         response_mask,
         index,
         balanced=True,
+        hindsight=True,
+        norm_adv_by_std_in_grpo=norm_adv_by_std_in_grpo,
+        process_alignment_scale=process_alignment_scale,
+        minimum_weight=minimum_weight,
+        maximum_weight=maximum_weight,
+    )
+
+
+@register_adv_est("tau_hindsight_grpo")
+def compute_tau_hindsight_grpo(
+    token_level_rewards: torch.Tensor,
+    response_mask: torch.Tensor,
+    index: np.ndarray,
+    norm_adv_by_std_in_grpo: bool = True,
+    config=None,
+    **_: Any,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Sequence-baseline GRPO with hindsight token credit only."""
+
+    process_alignment_scale = 1.0
+    minimum_weight = 0.05
+    maximum_weight = 3.0
+    if config is not None:
+        norm_adv_by_std_in_grpo = bool(
+            config.get("norm_adv_by_std_in_grpo", norm_adv_by_std_in_grpo)
+        )
+        process_alignment_scale = float(
+            config.get("hindsight_process_alignment_scale", 1.0)
+        )
+        minimum_weight = float(config.get("hindsight_minimum_weight", 0.05))
+        maximum_weight = float(config.get("hindsight_maximum_weight", 3.0))
+    return _tau_grpo_advantage(
+        token_level_rewards,
+        response_mask,
+        index,
+        balanced=False,
         hindsight=True,
         norm_adv_by_std_in_grpo=norm_adv_by_std_in_grpo,
         process_alignment_scale=process_alignment_scale,

@@ -1,4 +1,4 @@
-"""Prepare tau2 datasets and launch one configured verl experiment."""
+"""Build locked official-airline datasets and launch one verl experiment."""
 
 from __future__ import annotations
 
@@ -11,15 +11,15 @@ from typing import Any
 
 import yaml
 
-from agent_rl.trainer.config_adapter import (
-    ExperimentConfig,
-    load_experiment_config,
-)
+from agent_rl.trainer.config_adapter import ExperimentConfig, load_experiment_config
+from agent_rl.trainer.preflight import validate_experiment_config
 
 
 def _stringify(value: Any) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
+    if value is None:
+        return "null"
     if isinstance(value, (list, dict)):
         return yaml.safe_dump(value, default_flow_style=True).strip()
     return str(value)
@@ -32,119 +32,72 @@ def _override(name: str, value: Any) -> str:
 def _rollout_parallelism(config: ExperimentConfig) -> tuple[int, int]:
     max_concurrent = int(config.rollout.get("max_concurrent_episodes", 8))
     requested_workers = int(config.runtime.get("agent_loop_workers", 8))
-    if max_concurrent <= 0:
-        raise ValueError("rollout.max_concurrent_episodes must be positive")
-    if requested_workers <= 0:
-        raise ValueError("runtime.agent_loop_workers must be positive")
-
+    if max_concurrent <= 0 or requested_workers <= 0:
+        raise ValueError("rollout concurrency and worker counts must be positive")
     workers = min(requested_workers, max_concurrent)
-    episodes_per_worker = max(1, max_concurrent // workers)
-    return workers, episodes_per_worker
+    return workers, max(1, max_concurrent // workers)
+
+
+def _assert_formal_airline_config(config: ExperimentConfig) -> None:
+    domain = config.environment.get("domain")
+    domains = config.environment.get("domains")
+    if domain != "airline" or domains not in (None, [], ()):
+        raise ValueError(
+            "formal experiments are locked to environment.domain='airline'"
+        )
+    if config.environment.get("train_split") != "train":
+        raise ValueError("formal training must use the official airline train split")
+    if config.environment.get("evaluation_split") != "test":
+        raise ValueError("formal evaluation must use the official airline test split")
+
+
+def _output_root(config: ExperimentConfig) -> Path:
+    return Path(
+        os.environ.get("AGENT_RL_OUTPUT_ROOT", config.runtime["output_root"])
+    )
 
 
 def _prepare_files(config: ExperimentConfig) -> tuple[Path, Path, Path]:
     from agent_rl.data.build_dataset import (
-        build_official_eval_dataset,
+        build_official_test_dataset,
+        build_official_train_dataset,
     )
-    from agent_rl.data.synthetic.builder import (
-        SyntheticBuildConfig,
-        build_synthetic_corpus,
-        validate_corpus_manifest,
-    )
-    from agent_rl.data.synthetic.audit import (
-        AuditStatus,
-        SyntheticAuditConfig,
-        audit_synthetic_corpus,
-        write_audit_report,
-    )
-    from agent_rl.data.synthetic.sampler import build_balanced_verl_dataset
-    from agent_rl.data.synthetic.schema import SyntheticSplit
 
+    _assert_formal_airline_config(config)
     runtime = config.runtime
     dataset_root = Path(
         os.environ.get("AGENT_RL_DATASET_ROOT", runtime["dataset_root"])
     )
-    output_root = Path(os.environ.get("AGENT_RL_OUTPUT_ROOT", runtime["output_root"]))
-    domains = tuple(config.environment.get("domains") or ())
-    if not domains:
-        domain = config.environment.get("domain")
-        if not isinstance(domain, str) or not domain.strip():
-            raise ValueError("environment config requires domain or domains")
-        domains = (domain,)
-
+    output_root = _output_root(config)
+    official_root = dataset_root / "official_airline"
+    evaluation_only = bool(config.raw.get("evaluation_only", False))
     seed = int(runtime.get("seed", 42))
-    if bool(config.raw.get("evaluation_only", False)):
-        eval_root = dataset_root / "official_eval"
-        validation_path = eval_root / "base.jsonl"
-        build_official_eval_dataset(
-            validation_path,
-            domains=domains,
-            split="base",
-            seed=seed,
-        )
+
+    if evaluation_only:
+        validation_path = official_root / "test_4seed.jsonl"
+        count = build_official_test_dataset(validation_path)
+        if count != 80:
+            raise RuntimeError(f"locked final evaluation expected 80 rows, got {count}")
         train_path = validation_path
     else:
-        if set(domains) != {"airline", "retail", "telecom"}:
-            raise ValueError(
-                "formal synthetic training requires airline, retail, and telecom"
-            )
-        corpus_root = Path(
-            os.environ.get(
-                "AGENT_RL_SYNTHETIC_ROOT",
-                runtime.get("synthetic_corpus_root", dataset_root / "synthetic"),
-            )
-        )
-        synthetic_seed = int(runtime.get("synthetic_seed", 43))
-        build_config = SyntheticBuildConfig(
-            output_root=corpus_root,
-            seed=synthetic_seed,
-            max_train_per_domain=int(
-                runtime.get("synthetic_max_train_per_domain", 128)
-            ),
-            max_validation_per_domain=int(
-                runtime.get("synthetic_max_validation_per_domain", 22)
-            ),
-            training_database_root=Path(
-                runtime.get("training_database_root", dataset_root / "training_db")
-            ),
-            telecom_clone_factor=int(runtime.get("telecom_clone_factor", 16)),
-        )
-        if not (corpus_root / "manifest.json").is_file():
-            build_synthetic_corpus(build_config)
-        else:
-            validate_corpus_manifest(build_config)
-        audit_report = audit_synthetic_corpus(
-            SyntheticAuditConfig(corpus_root=corpus_root)
-        )
-        write_audit_report(
-            audit_report,
-            json_path=corpus_root / "quality_audit.json",
-            markdown_path=corpus_root / "quality_audit.md",
-        )
-        if audit_report.status is AuditStatus.FAIL:
-            failed = [
-                f"{item.domain or 'global'}:{item.code}"
-                for item in audit_report.findings
-                if item.status is AuditStatus.FAIL
-            ]
-            raise RuntimeError(
-                "synthetic corpus failed quality audit: " + ", ".join(failed)
-            )
-        balanced_root = dataset_root / "balanced"
-        train_path = balanced_root / "train.jsonl"
-        validation_path = balanced_root / "validation.jsonl"
-        build_balanced_verl_dataset(
+        task_limit = config.raw.get("train_task_limit")
+        task_limit = int(task_limit) if task_limit is not None else None
+        expected_count = task_limit or 30
+        filename = "train.jsonl" if task_limit is None else f"train_first_{task_limit}.jsonl"
+        train_path = official_root / filename
+        count = build_official_train_dataset(
             train_path,
-            corpus_root=corpus_root,
-            split=SyntheticSplit.TRAIN,
-            seed=synthetic_seed,
+            seed=seed,
+            task_limit=task_limit,
         )
-        build_balanced_verl_dataset(
-            validation_path,
-            corpus_root=corpus_root,
-            split=SyntheticSplit.VALIDATION,
-            seed=synthetic_seed + 100_000,
-        )
+        if count != expected_count:
+            raise RuntimeError(
+                f"locked training expected {expected_count} rows, got {count}"
+            )
+        # verl requires a val file even when validation is disabled. Reusing the
+        # train reference here does not trigger evaluation because both
+        # val_before_train and test_freq are disabled for training runs.
+        validation_path = train_path
 
     run_dir = output_root / config.experiment.lower()
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -155,9 +108,11 @@ def _prepare_files(config: ExperimentConfig) -> tuple[Path, Path, Path]:
             "name": "tau_agent",
             "_target_": "agent_rl.rollout.tau_agent_loop.TauAgentLoop",
             "settings": {
-                "max_steps": int(config.environment.get("max_steps", 30)),
+                "max_steps": int(config.environment["max_steps"]),
                 "user_llm": config.environment["user_llm"],
-                "user_llm_args": dict(config.environment.get("user_llm_args") or {}),
+                "user_llm_args": dict(
+                    config.environment.get("user_llm_args") or {}
+                ),
                 "evaluator_llm": config.environment["evaluator_llm"],
                 "evaluator_llm_args": dict(
                     config.environment.get("evaluator_llm_args") or {}
@@ -189,7 +144,9 @@ def _prepare_files(config: ExperimentConfig) -> tuple[Path, Path, Path]:
                         "max_chars", 24_000
                     )
                 ),
-                "max_action_tokens": 2_048,
+                "max_action_tokens": int(
+                    config.rollout.get("max_action_tokens", 256)
+                ),
                 "max_episode_attempts": int(
                     config.rollout.get("max_episode_attempts", 3)
                 ),
@@ -197,12 +154,6 @@ def _prepare_files(config: ExperimentConfig) -> tuple[Path, Path, Path]:
                     config.rollout.get("retry_backoff_seconds", 1.0)
                 ),
                 "max_concurrent_episodes_per_worker": episodes_per_worker,
-                "training_database_root": str(
-                    runtime.get(
-                        "training_database_root",
-                        dataset_root / "training_db",
-                    )
-                ),
             },
         }
     ]
@@ -211,30 +162,34 @@ def _prepare_files(config: ExperimentConfig) -> tuple[Path, Path, Path]:
     return train_path, validation_path, loop_path
 
 
+def _advantage_estimator(config: ExperimentConfig) -> str:
+    balanced = config.algorithm["aggregation"] == "balanced"
+    if config.credit is not None:
+        return "tau_hindsight_balanced_grpo" if balanced else "tau_hindsight_grpo"
+    return "tau_balanced_grpo" if balanced else "grpo"
+
+
 def build_verl_command(config: ExperimentConfig) -> list[str]:
+    validate_experiment_config(config)
     train_path, validation_path, loop_path = _prepare_files(config)
     runtime = config.runtime
     model = config.model
     algorithm = config.algorithm
     model_path = os.environ.get("AGENT_RL_MODEL_PATH", runtime["model_path"])
-
-    if config.credit is not None:
-        adv_estimator = "tau_hindsight_balanced_grpo"
-    elif algorithm["aggregation"] == "balanced":
-        adv_estimator = "tau_balanced_grpo"
-    else:
-        adv_estimator = "grpo"
-
-    response_length = int(model["max_response_length"])
+    evaluation_only = bool(config.raw.get("evaluation_only", False))
     prompt_length = int(model["max_prompt_length"])
-    logger = runtime.get("logger", ["console"])
-    agent_loop_workers, _ = _rollout_parallelism(config)
+    response_length = int(model["max_response_length"])
+    rollout_n = 1 if evaluation_only else int(runtime["rollout_group_size"])
+    workers, _ = _rollout_parallelism(config)
+    run_root = _output_root(config) / config.experiment.lower()
+
     command = [
         sys.executable,
         "-m",
         "verl.trainer.main_ppo",
-        _override("algorithm.adv_estimator", adv_estimator),
+        _override("algorithm.adv_estimator", _advantage_estimator(config)),
         _override("algorithm.use_kl_in_reward", False),
+        _override("algorithm.rollout_correction.bypass_mode", False),
         _override("data.train_files", [str(train_path)]),
         _override("data.val_files", [str(validation_path)]),
         _override("data.train_batch_size", runtime["train_batch_size"]),
@@ -245,29 +200,47 @@ def build_verl_command(config: ExperimentConfig) -> list[str]:
         _override("+data.apply_chat_template_kwargs.enable_thinking", False),
         _override("actor_rollout_ref.model.path", model_path),
         _override(
-            "actor_rollout_ref.model.external_lib", "agent_rl.trainer.verl_algorithms"
+            "actor_rollout_ref.model.external_lib",
+            "agent_rl.trainer.verl_algorithms",
         ),
         _override("actor_rollout_ref.model.lora_rank", model.get("lora_rank", 0)),
         _override("actor_rollout_ref.model.lora_alpha", model.get("lora_alpha", 16)),
         _override(
+            "actor_rollout_ref.model.target_modules",
+            model.get("lora_target_modules", "all-linear"),
+        ),
+        _override(
             "actor_rollout_ref.model.enable_gradient_checkpointing",
-            model.get("gradient_checkpointing", True),
+            model.get("gradient_checkpointing", False),
         ),
         _override(
-            "actor_rollout_ref.actor.policy_loss.loss_mode", algorithm["verl_loss_mode"]
+            "actor_rollout_ref.model.enable_activation_offload",
+            model.get("activation_offload", False),
         ),
         _override(
-            "actor_rollout_ref.actor.loss_agg_mode", algorithm["verl_loss_agg_mode"]
+            "actor_rollout_ref.model.use_remove_padding",
+            model.get("use_remove_padding", True),
         ),
         _override(
-            "actor_rollout_ref.actor.clip_ratio_low", algorithm["clip_ratio_low"]
+            "actor_rollout_ref.model.use_fused_kernels",
+            model.get("use_fused_kernels", True),
         ),
         _override(
-            "actor_rollout_ref.actor.clip_ratio_high", algorithm["clip_ratio_high"]
+            "actor_rollout_ref.actor.policy_loss.loss_mode",
+            algorithm["verl_loss_mode"],
         ),
         _override(
-            "actor_rollout_ref.actor.use_kl_loss", algorithm.get("use_kl_loss", False)
+            "actor_rollout_ref.actor.loss_agg_mode",
+            algorithm["verl_loss_agg_mode"],
         ),
+        _override("actor_rollout_ref.actor.clip_ratio_low", algorithm["clip_ratio_low"]),
+        _override("actor_rollout_ref.actor.clip_ratio_high", algorithm["clip_ratio_high"]),
+        _override("actor_rollout_ref.actor.use_kl_loss", not evaluation_only),
+        _override("actor_rollout_ref.actor.kl_loss_coef", runtime["kl_loss_coef"]),
+        _override("actor_rollout_ref.actor.ppo_epochs", runtime["ppo_epochs"]),
+        _override("actor_rollout_ref.actor.optim.lr", runtime["optimizer_lr"]),
+        _override("actor_rollout_ref.actor.grad_clip", runtime["grad_clip"]),
+        _override("actor_rollout_ref.actor.fsdp_config.use_orig_params", True),
         _override(
             "actor_rollout_ref.actor.ppo_mini_batch_size",
             runtime["ppo_mini_batch_size"],
@@ -284,19 +257,12 @@ def build_verl_command(config: ExperimentConfig) -> list[str]:
         _override("actor_rollout_ref.rollout.name", "vllm"),
         _override("actor_rollout_ref.rollout.mode", "async"),
         _override("actor_rollout_ref.rollout.tensor_model_parallel_size", 1),
-        _override(
-            "actor_rollout_ref.rollout.n",
-            (
-                runtime.get("evaluation_trials", 4)
-                if bool(config.raw.get("evaluation_only", False))
-                else runtime["rollout_group_size"]
-            ),
-        ),
-        _override(
-            "actor_rollout_ref.rollout.temperature",
-            config.rollout.get("temperature", 1.0),
-        ),
-        _override("actor_rollout_ref.rollout.top_p", config.rollout.get("top_p", 0.95)),
+        _override("actor_rollout_ref.rollout.n", rollout_n),
+        _override("actor_rollout_ref.rollout.val_kwargs.n", 1),
+        _override("actor_rollout_ref.rollout.temperature", config.rollout["temperature"]),
+        _override("actor_rollout_ref.rollout.top_p", config.rollout["top_p"]),
+        _override("actor_rollout_ref.rollout.seed", runtime["seed"]),
+        _override("actor_rollout_ref.rollout.full_determinism", evaluation_only),
         _override(
             "actor_rollout_ref.rollout.gpu_memory_utilization",
             runtime["gpu_memory_utilization"],
@@ -306,49 +272,55 @@ def build_verl_command(config: ExperimentConfig) -> list[str]:
             runtime["max_num_batched_tokens"],
         ),
         _override("actor_rollout_ref.rollout.max_num_seqs", runtime["max_num_seqs"]),
+        _override("actor_rollout_ref.rollout.free_cache_engine", True),
+        _override("actor_rollout_ref.rollout.enable_chunked_prefill", True),
+        _override("actor_rollout_ref.rollout.enable_prefix_caching", True),
         _override("actor_rollout_ref.rollout.agent.default_agent_loop", "tau_agent"),
         _override(
-            "actor_rollout_ref.rollout.agent.agent_loop_config_path", str(loop_path)
+            "actor_rollout_ref.rollout.agent.agent_loop_config_path",
+            str(loop_path),
         ),
         _override(
             "+actor_rollout_ref.rollout.agent.agent_loop_manager_class",
             "agent_rl.trainer.tau_agent_loop_manager.TauAgentLoopManager",
         ),
-        _override(
-            "actor_rollout_ref.rollout.agent.num_workers",
-            agent_loop_workers,
-        ),
-        _override(
-            "trainer.project_name", runtime.get("project_name", "agent-rl-qwen3")
-        ),
+        _override("actor_rollout_ref.rollout.agent.num_workers", workers),
+        _override("trainer.project_name", runtime["project_name"]),
         _override("trainer.experiment_name", config.experiment.lower()),
-        _override("trainer.logger", logger),
+        _override("trainer.logger", runtime.get("logger", ["console"])),
         _override("trainer.n_gpus_per_node", runtime["n_gpus_per_node"]),
         _override("trainer.nnodes", runtime["nnodes"]),
         _override("trainer.total_epochs", runtime["total_epochs"]),
         _override("trainer.save_freq", runtime["save_freq"]),
         _override("trainer.test_freq", runtime["test_freq"]),
+        _override("trainer.val_before_train", runtime["val_before_train"]),
+        _override("trainer.resume_mode", runtime["resume_mode"]),
         _override(
             "trainer.max_actor_ckpt_to_keep",
-            runtime.get("max_actor_ckpt_to_keep", 1),
+            runtime["max_actor_ckpt_to_keep"],
         ),
         _override(
             "trainer.default_local_dir",
-            str(
-                Path(runtime["output_root"]) / config.experiment.lower() / "checkpoints"
-            ),
+            str(run_root / "checkpoints"),
         ),
         _override(
             "trainer.rollout_data_dir",
-            str(Path(runtime["output_root"]) / config.experiment.lower() / "rollouts"),
+            str(run_root / "rollouts"),
         ),
         _override(
             "trainer.validation_data_dir",
-            str(
-                Path(runtime["output_root"]) / config.experiment.lower() / "validation"
-            ),
+            str(run_root / "validation"),
         ),
     ]
+
+    adapter_path = os.environ.get(
+        "AGENT_RL_LORA_ADAPTER_PATH",
+        model.get("lora_adapter_path") or "",
+    )
+    if adapter_path:
+        command.append(
+            _override("actor_rollout_ref.model.lora_adapter_path", adapter_path)
+        )
     if config.credit is not None:
         command.extend(
             [
@@ -366,7 +338,7 @@ def build_verl_command(config: ExperimentConfig) -> list[str]:
                 ),
             ]
         )
-    if bool(config.raw.get("evaluation_only", False)):
+    if evaluation_only:
         command.append(_override("trainer.val_only", True))
     return command
 

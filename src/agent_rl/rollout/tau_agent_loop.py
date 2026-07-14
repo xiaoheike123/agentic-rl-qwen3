@@ -196,7 +196,10 @@ class TauAgentLoop(AgentLoopBase):
             database_source = "pseudonymized_training"
         group_id = str(kwargs.get("uid", task_id))
         sample_index = int(kwargs.get("rollout_n", 0))
-        seed = kwargs.get("seed")
+        base_seed = kwargs.get("seed")
+        episode_seed = (
+            int(base_seed) + sample_index if base_seed is not None else None
+        )
 
         env = TauEnv(
             TauEnvConfig(
@@ -214,7 +217,7 @@ class TauAgentLoop(AgentLoopBase):
         )
         reset = await self.loop.run_in_executor(
             None,
-            lambda: env.reset(seed=int(seed) if seed is not None else None),
+            lambda: env.reset(seed=episode_seed),
         )
         policy = reset.info.get("policy")
         tools = reset.info.get("tools")
@@ -245,7 +248,7 @@ class TauAgentLoop(AgentLoopBase):
             task_id=task_id,
             model=str(self.config.actor_rollout_ref.model.path),
             sample_index=sample_index,
-            seed=int(seed) if seed is not None else None,
+            seed=episode_seed,
             user_model=self.settings.user_llm,
             metadata={
                 "task_source": (
@@ -270,6 +273,7 @@ class TauAgentLoop(AgentLoopBase):
                 prompt_ids=prompt_ids + response_ids,
                 sampling_params={
                     **sampling_params,
+                    **({"seed": episode_seed} if episode_seed is not None else {}),
                     "stop_token_ids": list(
                         set(
                             (sampling_params.get("stop_token_ids") or [])
@@ -435,6 +439,18 @@ class TauAgentLoop(AgentLoopBase):
             turn_token_spans,
             len(response_ids),
         )
+        process_checks = (
+            episode.metadata.get("process_reward", {}).get("checks", [])
+        )
+
+        def count_checks(name: str, *, passed: bool | None = None) -> int:
+            return sum(
+                1
+                for check in process_checks
+                if check.get("name") == name
+                and (passed is None or bool(check.get("passed")) is passed)
+            )
+
         return AgentLoopOutput(
             prompt_ids=prompt_ids,
             response_ids=response_ids[: self.rollout_config.response_length],
@@ -447,14 +463,43 @@ class TauAgentLoop(AgentLoopBase):
                 "tau_hindsight_evidence": credit_evidence,
                 "reward_extra_info": {
                     "tau_episode_id": episode.episode_id,
+                    "tau_group_id": group_id,
+                    "tau_sample_index": sample_index,
+                    "tau_seed": episode_seed,
+                    "tau_domain": domain,
                     "tau_task_id": task_id,
                     "tau_success": bool(episode.success),
                     "tau_outcome_reward": float(episode.reward.outcome or 0.0),
                     "tau_process_reward": float(episode.reward.process or 0.0),
                     "tau_total_turns": len(episode.turns),
+                    "tau_prompt_tokens": len(prompt_ids),
+                    "tau_response_tokens": sum(response_mask),
+                    "tau_tool_call_count": sum(
+                        len(turn.tool_calls) for turn in episode.turns
+                    ),
+                    "tau_hit_max_turns": len(episode.turns) >= self.settings.max_steps,
                     "tau_retained_credit_turns": len(turn_token_spans),
                     "tau_context_rotations": context_rotations,
                     "tau_database_source": database_source,
+                    "tau_termination_reason": episode.termination_reason,
+                    "tau_invalid_action_count": count_checks(
+                        "action_parse", passed=False
+                    ),
+                    "tau_tool_error_count": count_checks(
+                        "tool_execution", passed=False
+                    ),
+                    "tau_missing_result_count": count_checks(
+                        "tool_result_received", passed=False
+                    ),
+                    "tau_recovery_count": count_checks(
+                        "error_recovery", passed=True
+                    ),
+                    "tau_unresolved_error_count": count_checks(
+                        "error_recovery", passed=False
+                    ),
+                    "tau_abnormal_truncation_count": count_checks(
+                        "abnormal_truncation", passed=False
+                    ),
                 },
             },
         )

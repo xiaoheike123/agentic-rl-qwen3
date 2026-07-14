@@ -186,6 +186,7 @@ def main() -> None:
                 base_url=config["base_url"],
                 api_key=config.get("api_key", "EMPTY"),
                 temperature=float(config.get("temperature", 0.0)),
+                top_p=float(config.get("top_p", 0.95)),
                 max_tokens=int(config.get("max_tokens", 2048)),
                 enable_thinking=bool(config.get("enable_thinking", False)),
             )

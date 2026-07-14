@@ -1,10 +1,7 @@
-experiment: E0
-evaluation_only: true
-evaluation_split: test
-evaluation_trials: 1
-model_config: configs/model/qwen3_8b_full.yaml
+experiment: E2
+model_config: configs/model/qwen3_8b_lora.yaml
 env_config: configs/env/tau_airline.yaml
-algorithm_config: configs/algorithm/grpo_sequence.yaml
+algorithm_config: configs/algorithm/grpo_balanced.yaml
 rollout_config: configs/rollout/sync.yaml
 reward_config: configs/reward/outcome.yaml
 credit_config: null

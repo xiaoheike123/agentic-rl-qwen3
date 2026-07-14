@@ -12,7 +12,10 @@ from agent_rl.data.synthetic.generators.common import (
     OracleActionSpec,
     make_candidate,
 )
-from agent_rl.data.synthetic.training_db import training_database_fingerprint
+from agent_rl.data.synthetic.training_db import (
+    TRAINING_DB_VERSION,
+    training_database_fingerprint,
+)
 
 
 def test_make_candidate_preserves_ordered_oracle_actions() -> None:
@@ -74,8 +77,12 @@ def test_manifest_rejects_a_stale_generator_version(
 ) -> None:
     config = SyntheticBuildConfig(output_root=tmp_path, domains=("airline",))
     training_manifest = {
-        "version": "1.0.0",
-        "config": {"seed": 42, "telecom_clone_factor": 16},
+        "version": TRAINING_DB_VERSION,
+        "config": {
+            "domains": ["airline"],
+            "seed": 42,
+            "telecom_clone_factor": 16,
+        },
         "domains": {},
     }
     monkeypatch.setattr(
@@ -89,7 +96,7 @@ def test_manifest_rejects_a_stale_generator_version(
     manifest = {
         "config": {
             "generator_version": GENERATOR_VERSION,
-            "training_database_version": "1.0.0",
+            "training_database_version": TRAINING_DB_VERSION,
             "training_database_fingerprint": training_database_fingerprint(
                 training_manifest
             ),

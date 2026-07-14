@@ -1,229 +1,120 @@
 # Remote Validation Checklist
 
-Target host:
+Run all commands from `/root/autodl-tmp/agent-rl-qwen3` in the unified training
+environment.
 
-- RTX PRO 6000 Blackwell 96GB
-- driver 580.95.05, CUDA capability 13.0
-- Python 3.12
-- repository `/root/autodl-tmp/agent-rl-qwen3`
-- model `/root/autodl-tmp/models/Qwen3-8B`
-
-Do not start a standalone port-8000 vLLM server during training. verl owns the
-training rollout engine and synchronizes its weights.
-
-## 1. Restore repository
+## 1. Sync and activate
 
 ```bash
-cd /root/autodl-tmp/agent-rl-qwen3
 git pull --ff-only
-git submodule update --init --recursive
-git status --short
+source /root/miniconda3/etc/profile.d/conda.sh
+conda activate /root/autodl-tmp/conda-envs/agent-rl-train
+set -a && source .env && set +a
 ```
 
-Expected: no unexpected local changes.
-
-## 2. Verify the existing standalone inference runtime
+## 2. Static and unit checks
 
 ```bash
-PY=/root/autodl-tmp/conda-envs/vllm/bin/python
-$PY -c "import torch,vllm; print(torch.__version__, vllm.__version__); print(torch.cuda.get_device_name()); assert torch.cuda.is_available()"
+python -m compileall -q src tests
+python -m pytest tests/unit tests/remote -q
+git submodule status
 nvidia-smi
-df -h /root/autodl-tmp
 ```
 
-Expected: Qwen-capable vLLM imports, PRO 6000 visible, enough data-disk space.
+Expected local baseline: 76 passing tests; GPU-only remote tests add coverage
+for torch, VERL, and the custom worker.
 
-The pinned verl 0.9.0.dev metadata declares vLLM `<=0.12.0`, while its checked
-in async-server source explicitly handles vLLM v0.20+ behavior. Because this
-metadata and implementation disagree, the training environment pins the
-already proven vLLM 0.24.0 and installs verl with `--no-deps`. Keep the
-standalone environment unchanged as a fallback and comparison point.
-
-## 3. Install the separate unified training runtime
+## 3. Verify locked datasets
 
 ```bash
-bash scripts/setup/install_runtime.sh
+python -m agent_rl.data.build_dataset \
+  --split train \
+  --output /root/autodl-tmp/agent-rl-data/official_airline/train.jsonl
+
+python -m agent_rl.data.build_dataset \
+  --split test \
+  --output /root/autodl-tmp/agent-rl-data/official_airline/test_4seed.jsonl
+
+wc -l /root/autodl-tmp/agent-rl-data/official_airline/*.jsonl
 ```
 
-This creates `/root/autodl-tmp/conda-envs/agent-rl-train` with vLLM 0.24.0,
-torch selected for the host CUDA driver, tau2, verl, and the project. It does
-not modify the working standalone environment. The one-step smoke is the
-authority on whether this exact pinned pair is runtime-compatible.
+Expected counts are 30 and 80. Never print hidden tau2 task bodies into logs.
 
-## 4. Load the DeepSeek secret
-
-Create `.env` in the project root with `DEEPSEEK_API_KEY=...`. The training
-launcher exports it to Ray workers. Then verify without printing the key:
+## 4. Dry-run command audit
 
 ```bash
-set -a; source .env; set +a
-test -n "${DEEPSEEK_API_KEY:-}" && echo DEEPSEEK_KEY_OK
+python -m agent_rl.trainer.verl_entry \
+  --config configs/train/g4_preflight.yaml \
+  --dry-run | tee /tmp/g4_command.txt
+
+grep -E 'lora_rank=64|rollout.n=4|use_orig_params=true|bypass_mode=false' \
+  /tmp/g4_command.txt
 ```
 
-## 5. Static and unit validation
+## 5. G=4 preflight
 
 ```bash
-PY=/root/autodl-tmp/conda-envs/agent-rl-train/bin/python
-$PY -m compileall -q src tests
-$PY -m pytest tests/unit -q
-$PY -m pytest tests/remote -q
-$PY -c "import agent_rl.rollout.tau_agent_loop; import agent_rl.trainer.tau_agent_loop_manager; import agent_rl.trainer.verl_algorithms; print('VERL_EXTENSIONS_OK')"
-tau2 check-data
-git diff --check
+bash scripts/train/train_experiment.sh configs/train/g4_preflight.yaml \
+  2>&1 | tee /root/autodl-tmp/agent-rl-logs/g4_preflight.log
 ```
 
-Expected: compilation and every unit test pass.
+The log must contain `LORA_OPTIMIZER_AUDIT` and a post-update vLLM message such
+as `vLLM load weights, loaded_params`. The checkpoint must contain
+`lora_train_meta.json` with rank/alpha 64. The run must save one optimizer step.
 
-## 6. Build and audit synthetic training data
+Export and audit the adapter after locating the saved actor directory:
 
 ```bash
-bash scripts/data/build_synthetic.sh
-cat /root/autodl-tmp/agent-rl-data/synthetic/manifest.json
-cat /root/autodl-tmp/agent-rl-data/synthetic/quality_audit.md
-$PY - <<'PY'
-import json
-from collections import Counter
-from pathlib import Path
+bash scripts/train/export_lora.sh \
+  /root/autodl-tmp/agent-rl-outputs/g4_preflight/checkpoints/global_step_1/actor \
+  /root/autodl-tmp/agent-rl-outputs/g4_preflight/export
 
-corpus = Path('/root/autodl-tmp/agent-rl-data/synthetic')
-training_db = Path('/root/autodl-tmp/agent-rl-data/training_db')
-manifest = json.loads((corpus / 'manifest.json').read_text())
-db_manifest = json.loads((training_db / 'manifest.json').read_text())
-audit = json.loads((corpus / 'quality_audit.json').read_text())
-assert manifest['config']['generator_version'] == '2.2.0'
-assert manifest['config']['seed'] == 43
-assert db_manifest['version'] == '1.0.0'
-assert manifest['config']['training_database_fingerprint']
-assert audit['status'] == 'PASS'
-for domain in ('airline', 'retail', 'telecom'):
-    assert db_manifest['domains'][domain]['official_identifier_overlap'] == 0
-    stats = manifest['domains'][domain]
-    assert stats['accepted_train'] == 128
-    assert stats['accepted_validation'] == 22
-
-root = Path('/root/autodl-tmp/agent-rl-data/balanced')
-for split in ('train', 'validation'):
-    rows = [json.loads(line) for line in (root / f'{split}.jsonl').read_text().splitlines()]
-    print(split, Counter(row['domain'] for row in rows))
-    assert all(row['task_id'].startswith('synthetic-') for row in rows)
-    assert all('synthetic_task' in row for row in rows)
-    assert all(
-        row['extra_info']['database_source'] == 'pseudonymized_training'
-        for row in rows
-    )
-    assert all(
-        row['extra_info']['training_database_fingerprint']
-        == manifest['config']['training_database_fingerprint']
-        for row in rows
-    )
-PY
+python -m agent_rl.trainer.lora_audit \
+  /root/autodl-tmp/agent-rl-outputs/g4_preflight/export/lora_adapter \
+  --log /root/autodl-tmp/agent-rl-logs/g4_preflight.log
 ```
 
-Expected: all Oracle and policy checks pass, the quality audit is `PASS`, and
-the balanced files contain 128 train plus 22 validation records per domain.
-Seed 43 controls clean-room corpus construction; training sampling still uses
-seed 42. Existing corpora from an older generator version must be rebuilt.
+This checks rank/alpha, adapter-only tensors, at least one changed LoRA-B
+tensor, optimizer audit output, vLLM adapter refresh, cache-reset configuration,
+and disabled bypass mode.
 
-Export but do not train on the official evaluation set:
+Locate the rollout JSONL and run:
 
 ```bash
-$PY -m agent_rl.data.build_dataset official-eval \
-  --output /root/autodl-tmp/agent-rl-data/official_eval/base.jsonl \
-  --domains airline retail telecom --split base
-test "$(wc -l < /root/autodl-tmp/agent-rl-data/official_eval/base.jsonl)" -eq 278
+bash scripts/eval/eval_g4_preflight.sh \
+  /root/autodl-tmp/agent-rl-outputs/g4_preflight/rollouts/0.jsonl
 ```
 
-## 7. Resolve the E1 command without training
+Keep G=4 only when the report recommendation is `KEEP_G4`. A lower result is a
+diagnostic decision, not permission to inspect the official test set.
+
+## 6. E0 and formal training
 
 ```bash
-$PY -m agent_rl.trainer.verl_entry --config configs/train/e1_grpo_sequence.yaml --dry-run
+bash scripts/train/train_experiment.sh configs/train/e0_base_eval.yaml
+bash scripts/train/train_experiment.sh configs/train/e1_grpo_sequence.yaml
 ```
 
-Check model path, dataset paths, `algorithm.adv_estimator=grpo`,
-`loss_agg_mode=seq-mean-token-mean`, full-run group size 8, and one GPU.
+E2-E4 use their matching manifests. Each starts from the unchanged base model
+and writes to its own output directory. Do not resume E2 from E1.
 
-## 8. E0 and one-step E1 smoke
-
-Before formal training, record E0 once. It evaluates all 278 official base
-tasks with four trials and is therefore a full run, not a quick smoke:
+## 7. Frozen LoRA evaluation
 
 ```bash
-WANDB_MODE=offline bash scripts/train/train_experiment.sh \
-  configs/train/e0_base_eval.yaml
+AGENT_RL_LORA_ADAPTER_PATH=/path/to/exported/adapter \
+  bash scripts/train/train_experiment.sh configs/train/final_lora_eval.yaml \
+  trainer.experiment_name=e1_final
+
+bash scripts/eval/eval_official_airline.sh \
+  /root/autodl-tmp/agent-rl-outputs/e1_final/validation/0.jsonl \
+  /root/autodl-tmp/agent-rl-outputs/e1_final/report
 ```
 
-This uses the same TauAgentLoop and prompt as training. The older `tau2 run`
-smoke remains useful for official-stack diagnostics, but it is not the E0
-research baseline because its agent prompt implementation differs.
+The evaluator rejects anything other than the exact 20-task x four-seed grid.
+Archive `summary.json`, `tasks.csv`, `trials.csv`, the resolved command, git
+commit, submodule commits, model checksum, and SwanLab run URL.
 
-```bash
-WANDB_MODE=offline bash scripts/train/train_experiment.sh \
-  configs/train/e1_grpo_sequence.yaml \
-  trainer.total_training_steps=1 \
-  data.train_batch_size=1 \
-  actor_rollout_ref.actor.ppo_mini_batch_size=4 \
-  actor_rollout_ref.rollout.n=4
-```
+## 8. Shutdown safety
 
-Acceptance checks:
-
-- verl launches one vLLM rollout engine;
-- four smoke rollouts share one `uid` (full experiments use eight);
-- DeepSeek user calls succeed;
-- tau2 returns rewards;
-- actor loss and gradient update complete;
-- checkpoint/output stays under `/root/autodl-tmp`.
-
-## 9. Algorithm smoke matrix
-
-Run one step for E2-E5 using the same overrides. Confirm:
-
-- E2: native GRPO + `token-mean`;
-- E3: `tau_balanced_grpo`;
-- E4: E3 plus nonzero process-reward metrics;
-- E5: `tau_hindsight_balanced_grpo` and nonuniform credit when evidence differs.
-
-Also inspect `tau_context_rotations`, `tau_total_turns`, and
-`tau_retained_credit_turns`. Context rotation is truncated backpropagation:
-turns removed from the active token window remain in reward computation but do
-not receive token gradients. Report the rotation rate and retained-turn ratio;
-do not describe this as full-history credit assignment.
-
-## 10. Full experiments
-
-Run E1-E5 separately with their unmodified manifests. Before each run record
-the Git commit, submodule commits, model hash, seed, prompt hash, and config.
-Use W&B for curves and keep checkpoints on the data disk.
-
-The 100GB data disk is suitable for one active experiment, not an unlimited
-archive of full checkpoints from E1-E5. The runtime retains one actor
-checkpoint per experiment; archive final adapters/metrics and remove obsolete
-optimizer checkpoints before starting the next full run, or expand the disk.
-
-## 11. Independent clean evaluation
-
-Stop training, start the standalone evaluation server, then run tau2:
-
-```bash
-bash scripts/vllm/serve_qwen3_8b.sh
-# In another terminal:
-bash scripts/eval/eval_tau.sh
-```
-
-## 12. Robustness evaluation
-
-Use a reviewed JSONL manifest containing meaning-preserving paraphrase and
-information-order variants. Run clean and all three perturbations with the
-same task IDs, seeds, prompt, sampling settings, and checkpoint. Report
-perturbed success, success drop, recovery success, and extra steps.
-
-## 13. Before shutting down AutoDL
-
-```bash
-git status --short
-df -h /root/autodl-tmp
-find /root/autodl-tmp/agent-rl-outputs -maxdepth 3 -type f | head
-```
-
-Push source/config changes and confirm checkpoints, W&B offline logs, datasets,
-and evaluation outputs are under `/root/autodl-tmp`, not the 30GB system disk.
+Before stopping the instance, verify checkpoints and reports exist on the data
+disk, push code commits, and copy irreplaceable logs off the system disk.

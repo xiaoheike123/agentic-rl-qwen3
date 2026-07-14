@@ -16,6 +16,28 @@ from agent_rl.trainer.credit_encoding import encode_evidence_in_token_rewards
 class TauAgentLoopWorker(AgentLoopWorker):
     """Replace scalar terminal rm_scores with sum-preserving credit scores."""
 
+    async def _run_agent_loop(
+        self,
+        sampling_params,
+        trajectory,
+        *,
+        agent_name,
+        trace=True,
+        **kwargs,
+    ):
+        """Forward VERL's repeat index so each GRPO sample gets its own seed."""
+
+        kwargs["rollout_n"] = int(trajectory["rollout_n"])
+        kwargs["trajectory_step"] = int(trajectory["step"])
+        kwargs["validate"] = bool(trajectory["validate"])
+        return await super()._run_agent_loop(
+            sampling_params,
+            trajectory,
+            agent_name=agent_name,
+            trace=trace,
+            **kwargs,
+        )
+
     def _postprocess(self, inputs, input_non_tensor_batch=None, validate=False):
         output = super()._postprocess(
             inputs,

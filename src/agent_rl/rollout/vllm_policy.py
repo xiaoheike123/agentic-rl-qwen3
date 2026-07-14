@@ -19,6 +19,7 @@ class VLLMPolicyConfig:
     base_url: str = "http://127.0.0.1:8000/v1"
     api_key: str = "EMPTY"
     temperature: float = 0.0
+    top_p: float = 0.95
     max_tokens: int = 2048
     timeout: float = 120.0
     max_retries: int = 2
@@ -33,6 +34,9 @@ class VLLMPolicyConfig:
 
         if self.max_tokens <= 0:
             raise ValueError("max_tokens must be greater than zero")
+
+        if not 0.0 < self.top_p <= 1.0:
+            raise ValueError("top_p must be in the interval (0, 1]")
 
         if self.timeout <= 0:
             raise ValueError("timeout must be greater than zero")
@@ -68,6 +72,7 @@ class VLLMPolicy:
             "model": self.config.model,
             "messages": list(messages),
             "temperature": self.config.temperature,
+            "top_p": self.config.top_p,
             "max_tokens": self.config.max_tokens,
             "extra_body": {
                 "chat_template_kwargs": {

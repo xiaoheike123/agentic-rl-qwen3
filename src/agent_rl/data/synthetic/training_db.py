@@ -18,18 +18,30 @@ from tau2.domains.retail.utils import RETAIL_DB_PATH
 from tau2.domains.telecom.data_model import TelecomDB
 from tau2.domains.telecom.utils import TELECOM_DB_PATH
 
+from agent_rl.data.synthetic.schema import (
+    DEFAULT_TRAINING_DOMAINS,
+    SUPPORTED_DOMAINS,
+)
 
-TRAINING_DB_VERSION = "1.0.0"
-SUPPORTED_TRAINING_DOMAINS = ("airline", "retail", "telecom")
+
+TRAINING_DB_VERSION = "1.1.0"
 
 
 @dataclass(frozen=True, slots=True)
 class TrainingDatabaseConfig:
     output_root: Path
+    domains: tuple[str, ...] = DEFAULT_TRAINING_DOMAINS
     seed: int = 43
     telecom_clone_factor: int = 16
 
     def __post_init__(self) -> None:
+        invalid = set(self.domains) - SUPPORTED_DOMAINS
+        if invalid:
+            raise ValueError(f"unsupported training database domains: {sorted(invalid)}")
+        if not self.domains:
+            raise ValueError("at least one training database domain is required")
+        if len(set(self.domains)) != len(self.domains):
+            raise ValueError("training database domains must be unique")
         if self.telecom_clone_factor <= 0:
             raise ValueError("telecom_clone_factor must be positive")
 
@@ -679,24 +691,28 @@ def _assert_disjoint(domain: str, source: Any, synthetic: Any) -> None:
         raise ValueError(f"{domain} training DB retains official identifiers: {preview}")
 
 
-def _source_databases() -> dict[str, Any]:
-    return {
-        "airline": FlightDB.load(AIRLINE_DB_PATH),
-        "retail": RetailDB.load(RETAIL_DB_PATH),
-        "telecom": TelecomDB.load(TELECOM_DB_PATH),
+def _source_databases(domains: tuple[str, ...]) -> dict[str, Any]:
+    loaders = {
+        "airline": lambda: FlightDB.load(AIRLINE_DB_PATH),
+        "retail": lambda: RetailDB.load(RETAIL_DB_PATH),
+        "telecom": lambda: TelecomDB.load(TELECOM_DB_PATH),
     }
+    return {domain: loaders[domain]() for domain in domains}
 
 
 def build_training_databases(config: TrainingDatabaseConfig) -> dict[str, Any]:
-    sources = _source_databases()
-    databases = {
-        "airline": _synthetic_airline_db(sources["airline"], seed=config.seed),
-        "retail": _synthetic_retail_db(sources["retail"], seed=config.seed),
-        "telecom": _synthetic_telecom_db(
-            sources["telecom"],
+    sources = _source_databases(config.domains)
+    builders = {
+        "airline": lambda source: _synthetic_airline_db(source, seed=config.seed),
+        "retail": lambda source: _synthetic_retail_db(source, seed=config.seed),
+        "telecom": lambda source: _synthetic_telecom_db(
+            source,
             seed=config.seed,
             clone_factor=config.telecom_clone_factor,
         ),
+    }
+    databases = {
+        domain: builders[domain](sources[domain]) for domain in config.domains
     }
     manifest_domains: dict[str, Any] = {}
     for domain, database in databases.items():
@@ -716,6 +732,7 @@ def build_training_databases(config: TrainingDatabaseConfig) -> dict[str, Any]:
         "config": {
             **asdict(config),
             "output_root": str(config.output_root),
+            "domains": list(config.domains),
         },
         "domains": manifest_domains,
     }
@@ -751,6 +768,7 @@ def validate_training_databases(config: TrainingDatabaseConfig) -> dict[str, Any
         raise FileNotFoundError(manifest_path)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     expected_config = {
+        "domains": list(config.domains),
         "seed": config.seed,
         "telecom_clone_factor": config.telecom_clone_factor,
     }
@@ -768,8 +786,8 @@ def validate_training_databases(config: TrainingDatabaseConfig) -> dict[str, Any
     if mismatches:
         raise ValueError(f"training DB manifest mismatch: {mismatches}")
 
-    sources = _source_databases()
-    for domain in SUPPORTED_TRAINING_DOMAINS:
+    sources = _source_databases(config.domains)
+    for domain in config.domains:
         database = load_training_database(config.output_root, domain)
         expected = (manifest.get("domains") or {}).get(domain) or {}
         if expected.get("source_hash") != sources[domain].get_hash():
@@ -802,12 +820,19 @@ def load_training_database(root: str | Path, domain: str) -> Any:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-root", required=True)
+    parser.add_argument(
+        "--domains",
+        nargs="+",
+        choices=sorted(SUPPORTED_DOMAINS),
+        default=list(DEFAULT_TRAINING_DOMAINS),
+    )
     parser.add_argument("--seed", type=int, default=43)
     parser.add_argument("--telecom-clone-factor", type=int, default=16)
     parser.add_argument("--validate-only", action="store_true")
     args = parser.parse_args()
     config = TrainingDatabaseConfig(
         output_root=Path(args.output_root),
+        domains=tuple(args.domains),
         seed=args.seed,
         telecom_clone_factor=args.telecom_clone_factor,
     )

@@ -1,43 +1,70 @@
-# Experiment Plan
+# Final Experiment Plan
 
-Build order:
+## Data boundary
 
-1. Define the trajectory schema and JSONL persistence.
-2. Build and audit three-domain synthetic train/validation data.
-3. Implement one synchronous episode worker and batch collector.
-4. Freeze the official `base` evaluation protocol and record E0 once.
-5. Integrate verl and run E1 vanilla GRPO with sequence aggregation.
-6. Compare E2 token and E3 balanced aggregation under identical settings.
-7. Add environment-verifiable process rewards for E4.
-8. Add hindsight turn-level credit assignment for E5.
-9. Compare synchronous and asynchronous rollout throughput as S0/S1.
-10. Evaluate frozen E0, E3, and E5 under interaction perturbations.
+The project uses only the upstream tau2 airline split:
 
-All E1-E5 experiments use the same generated corpus and the same balanced
-airline/retail/telecom row order. Synthetic validation is used for checkpoint
-selection. Official `base` results are not used for tuning.
+- Train: 30 official `train` tasks.
+- Test: 20 disjoint official `test` tasks.
+- Final evaluation: four fixed seeds for every test task.
 
-Algorithm experiments:
+The test set is touched only after a checkpoint and its inference settings are
+frozen. It must not select epochs, hyperparameters, prompts, or checkpoints.
+Any decision to extend beyond one epoch uses train-only diagnostics such as
+reward, nonzero-advantage coverage, KL, entropy, clipping ratio, and stability.
 
-- `E0`: Base Qwen3, no RL.
-- `E1`: Vanilla GRPO with sequence aggregation.
-- `E2`: GRPO with token aggregation.
-- `E3`: GRPO with balanced aggregation.
-- `E4`: E3 plus environment-verifiable process reward.
-- `E5`: E4 plus hindsight turn-level credit.
+## Preflight
 
-System experiments:
+Run eight train tasks with four rollouts each. The report groups all 32
+trajectories by task and measures the fraction of groups with nonzero reward
+variance:
 
-- `S0`: Fixed-policy episode collection with a batch barrier.
-- `S1`: Concurrent fixed-policy episode collection with ready-group streaming.
+- At least 50%: keep `G=4`.
+- 30% to 50%: first adjust sampling or prompt behavior and repeat G=4.
+- Below 30%: diagnose collapse, then consider G=6 or G=8.
 
-S0 and S1 use the same frozen policy version for every compared batch. Policy
-staleness is deliberately excluded, so this axis measures throughput rather
-than changing the optimization objective.
+The same smoke run must show that only LoRA parameters are trainable, an
+optimizer step changes adapter weights, verl refreshes the vLLM adapter, and
+the rollout cache does not preserve the pre-update adapter.
 
-Robustness evaluation:
+## Training constants
 
-- `R0`: Clean interactions.
-- `R1`: User paraphrase.
-- `R2`: Information-order shift.
-- `R3`: Recoverable tool failure.
+- Base model: Qwen3-8B.
+- LoRA rank/alpha: 64/64.
+- Targets: q/k/v/o and gate/up/down projections.
+- One RTX PRO 6000 96GB, tensor parallel size 1.
+- 30 prompts, G=4, 120 trajectories per epoch.
+- PPO epochs 1; initial total epochs 1.
+- Learning rate 1e-5; gradient clipping 1.0; KL coefficient 0.001.
+- Temperature 0.8; top-p 0.95.
+- Maximum 16 agent turns and 256 generated tokens per turn.
+- 16K total prompt/response budget.
+
+## Experiments
+
+1. E0: frozen base-model test evaluation.
+2. E1: outcome GRPO with sequence aggregation.
+3. E2: outcome GRPO with balanced aggregation.
+4. E3: sequence GRPO with environment-verifiable process reward.
+5. E4: sequence GRPO with hindsight turn credit and outcome scalar reward.
+6. E5: pre-declared exploratory balanced aggregation plus hindsight credit.
+
+E1-E4 are independent runs from the identical base model and fixed data order.
+E5 is gated only by pre-registered compute availability, never by official test
+scores. Using test results to decide whether to run E5 would turn the same test
+set into a tuning set. Async rollout is a systems optimization and must not
+change policy version within one collected batch.
+
+## Reporting
+
+For every frozen checkpoint, run exactly 20 tasks x 4 seeds. Report:
+
+- success rate;
+- tau2 pass^1, pass^2, pass^3, pass^4;
+- mean turns and generated tokens;
+- mean tool calls, tool-error rate, invalid-action rate;
+- maximum-turn rate;
+- per-task and per-seed CSV files.
+
+Robustness perturbations are secondary evaluations and use frozen selected
+checkpoints only.

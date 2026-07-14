@@ -1,52 +1,69 @@
 # Agent RL Qwen3
 
-RL training for robust long-horizon tool agents on tau2/tau3-bench.
+LoRA-GRPO research on the official tau2 `airline` environment with Qwen3-8B,
+verl, vLLM, and a DeepSeek V4 Pro user simulator.
 
-## Stack
+## Locked protocol
 
-- Agent model: Qwen3-8B
-- Training: verl
-- Rollout inference: vLLM
-- User simulator: DeepSeek V4 Flash API through LiteLLM
-- Benchmark/environment: tau2/tau3-bench
-- Optimization: GRPO with sequence, token, and balanced aggregation
-- Credit: environment-verifiable process rewards and hindsight turn credit
-- Evaluation: robustness under interaction perturbations
-                                      
-## Layout
+- Domain: `airline` only.
+- Training data: the 30 official tau2 airline `train` task IDs.
+- Final evaluation: the 20 disjoint official airline `test` task IDs.
+- Final trials: four fixed seeds per test task, 80 episodes per checkpoint.
+- Training: independent one-epoch LoRA runs from the same Qwen3-8B base.
+- GRPO group size: `G=4`, subject to an eight-task preflight diagnostic.
+- Official metric: tau2 `pass^1` through `pass^4`, plus success and efficiency diagnostics.
 
-- `tau2-bench/`: upstream benchmark and simulator.
-- `verl/`: pinned upstream training framework submodule.
-- `src/agent_rl/`: environment, rollout, reward, credit, training, and robustness code.
-- `configs/`: experiment configuration.
-- `scripts/`: setup, data, serving, training, and evaluation launchers.
-- `docs/`: design notes and experiment plans.
-- `experiments/`: local checkpoints and outputs.
+The locked IDs and seeds live in
+`configs/data/airline_official.json`. Training never reads the official test
+split, and test results are not used to decide whether to train another epoch.
 
-## Training path
+## Experiment matrix
 
-```text
-verified synthetic airline / retail / telecom Task
--> official-base overlap guard
--> domain-balanced verl dataset
--> verl TauAgentLoop
--> current Qwen3 policy served by verl/vLLM
--> tau2 AgentGymEnv + DeepSeek user simulator
--> official outcome and optional verifiable process reward
--> GRPO update
+| ID | Aggregation | Scalar reward | Turn credit |
+| --- | --- | --- | --- |
+| E0 | none | none | base-model final evaluation |
+| E1 | sequence | outcome | none |
+| E2 | balanced | outcome | none |
+| E3 | sequence | outcome + environment process | none |
+| E4 | sequence | outcome | hindsight turn credit |
+| E5 | balanced | outcome | hindsight turn credit; optional |
+
+E5 is pre-declared exploratory and may run only when the compute budget was
+reserved in advance. It must not be triggered by looking at official test
+scores. Every trained experiment starts independently from the same base model;
+E2 is not initialized from E1.
+
+## Main commands
+
+```bash
+# Eight train tasks x four rollouts, one update.
+bash scripts/train/train_experiment.sh configs/train/g4_preflight.yaml
+
+# Formal E1 after the G=4 decision.
+bash scripts/train/train_experiment.sh configs/train/e1_grpo_sequence.yaml
+
+# Base-model final evaluation (80 pre-expanded rows).
+bash scripts/train/train_experiment.sh configs/train/e0_base_eval.yaml
+
+# Evaluate a trained LoRA adapter.
+AGENT_RL_LORA_ADAPTER_PATH=/path/to/adapter \
+  bash scripts/train/train_experiment.sh configs/train/final_lora_eval.yaml \
+  trainer.experiment_name=e1_final
 ```
 
-Public tau2 `base` tasks are evaluation-only and are never written to E1-E5
-training datasets. See `docs/data_pipeline.md` for generation and audit rules.
+Use `scripts/eval/eval_g4_preflight.sh` for the group diagnostic and
+`scripts/eval/eval_official_airline.sh` to produce the final JSON/CSV report.
 
-The standalone vLLM server on port 8000 is used for independent evaluation.
-Training starts and synchronizes its own vLLM rollout engine through verl.
+## Repository layout
 
-## Research axes
+- `configs/`: locked data, model, runtime, rollout, and experiment manifests.
+- `src/agent_rl/data/`: official split validation and verl dataset export.
+- `src/agent_rl/rollout/`: tau2 agent loop and vLLM interaction.
+- `src/agent_rl/rewards/`: environment-verifiable process evidence.
+- `src/agent_rl/credit/`: hindsight turn-level credit.
+- `src/agent_rl/trainer/`: verl command construction and custom estimators.
+- `src/agent_rl/eval/`: G=4 diagnostics and official four-seed evaluation.
+- `tau2-bench/`, `verl/`: pinned upstream submodules.
 
-```text
-Algorithm:   E0 base -> E1 sequence -> E2 token -> E3 balanced
-Credit:      E3 -> E4 process reward -> E5 hindsight turn credit
-Systems:     S0 barrier vs S1 ready-group streaming under a frozen policy
-Robustness:  clean vs paraphrase, information-order, and tool-failure tests
-```
+Synthetic-data utilities remain available for auxiliary analysis, but no formal
+E0-E5 configuration imports or trains on them.

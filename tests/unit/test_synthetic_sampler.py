@@ -60,10 +60,27 @@ def test_balanced_records_use_equal_domain_counts() -> None:
         seed=42,
     )
 
-    assert len(selected) == 9
+    assert len(selected) == 8
     assert {domain: [item.domain for item in selected].count(domain) for domain in {
-        "airline", "retail", "telecom"
-    }} == {"airline": 3, "retail": 3, "telecom": 3}
+        "airline", "retail"
+    }} == {"airline": 4, "retail": 4}
+
+
+def test_balanced_records_support_explicit_optional_domains() -> None:
+    records = [
+        *[_record("airline", index) for index in range(2)],
+        *[_record("telecom", index) for index in range(3)],
+    ]
+
+    selected = balanced_records(
+        records,
+        split=SyntheticSplit.TRAIN,
+        seed=42,
+        domains=("airline", "telecom"),
+    )
+
+    assert len(selected) == 4
+    assert {item.domain for item in selected} == {"airline", "telecom"}
 
 
 def test_verl_export_carries_training_database_provenance(
@@ -71,7 +88,7 @@ def test_verl_export_carries_training_database_provenance(
 ) -> None:
     corpus = tmp_path / "corpus"
     fingerprint = "f" * 64
-    for domain in ("airline", "retail", "telecom"):
+    for domain in ("airline", "retail"):
         write_records(
             corpus / domain / "train.jsonl",
             [_record(domain, 1)],
@@ -92,7 +109,7 @@ def test_verl_export_carries_training_database_provenance(
     )
 
     rows = [json.loads(line) for line in output.read_text().splitlines()]
-    assert count == 3
+    assert count == 2
     assert all(
         row["extra_info"]["database_source"]
         == "pseudonymized_training"

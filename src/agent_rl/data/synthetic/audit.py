@@ -15,6 +15,7 @@ from typing import Any, Iterable
 
 from agent_rl.data.synthetic.fingerprint import jaccard, task_tokens
 from agent_rl.data.synthetic.schema import (
+    DEFAULT_TRAINING_DOMAINS,
     SUPPORTED_DOMAINS,
     SyntheticSplit,
     SyntheticTaskRecord,
@@ -38,7 +39,7 @@ STATUS_RANK = {
 @dataclass(frozen=True, slots=True)
 class SyntheticAuditConfig:
     corpus_root: Path
-    domains: tuple[str, ...] = ("airline", "retail", "telecom")
+    domains: tuple[str, ...] = DEFAULT_TRAINING_DOMAINS
     min_split_size: int = 20
     min_templates_per_domain: int = 6
     max_dominant_template_fraction: float = 0.35
@@ -577,7 +578,7 @@ def main() -> None:
         "--domains",
         nargs="+",
         choices=sorted(SUPPORTED_DOMAINS),
-        default=["airline", "retail", "telecom"],
+        default=list(DEFAULT_TRAINING_DOMAINS),
     )
     parser.add_argument("--json-output")
     parser.add_argument("--markdown-output")

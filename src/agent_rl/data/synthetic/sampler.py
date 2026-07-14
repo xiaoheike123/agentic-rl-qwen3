@@ -7,7 +7,11 @@ import random
 from pathlib import Path
 from typing import Iterable
 
-from agent_rl.data.synthetic.schema import SyntheticSplit, SyntheticTaskRecord
+from agent_rl.data.synthetic.schema import (
+    DEFAULT_TRAINING_DOMAINS,
+    SyntheticSplit,
+    SyntheticTaskRecord,
+)
 from agent_rl.data.synthetic.storage import load_records
 
 
@@ -17,15 +21,21 @@ def balanced_records(
     split: SyntheticSplit,
     seed: int,
     per_domain_limit: int | None = None,
+    domains: tuple[str, ...] = DEFAULT_TRAINING_DOMAINS,
 ) -> list[SyntheticTaskRecord]:
+    expected = set(domains)
+    if not expected:
+        raise ValueError("at least one synthetic domain is required")
+    if len(expected) != len(domains):
+        raise ValueError("synthetic domains must be unique")
+
     by_domain: dict[str, list[SyntheticTaskRecord]] = {}
     for record in records:
-        if record.split is split:
+        if record.split is split and record.domain in expected:
             by_domain.setdefault(record.domain, []).append(record)
     if not by_domain:
         raise ValueError(f"no synthetic records found for split={split.value!r}")
 
-    expected = {"airline", "retail", "telecom"}
     missing = expected - set(by_domain)
     if missing:
         raise ValueError(f"missing synthetic domains: {sorted(missing)}")
@@ -58,6 +68,7 @@ def build_balanced_verl_dataset(
     split: SyntheticSplit,
     seed: int,
     per_domain_limit: int | None = None,
+    domains: tuple[str, ...] = DEFAULT_TRAINING_DOMAINS,
 ) -> int:
     root = Path(corpus_root)
     manifest_path = root / "manifest.json"
@@ -76,13 +87,14 @@ def build_balanced_verl_dataset(
         )
 
     records = []
-    for domain in ("airline", "retail", "telecom"):
+    for domain in domains:
         records.extend(load_records(root / domain / f"{split.value}.jsonl"))
     selected = balanced_records(
         records,
         split=split,
         seed=seed,
         per_domain_limit=per_domain_limit,
+        domains=domains,
     )
 
     output = Path(output_path)

@@ -12,6 +12,7 @@ from tau2.data_model.tasks import Task
 
 SYNTHETIC_SCHEMA_VERSION = 2
 SUPPORTED_DOMAINS = frozenset({"airline", "retail", "telecom"})
+DEFAULT_TRAINING_DOMAINS = ("airline", "retail")
 
 
 class SyntheticSplit(str, Enum):

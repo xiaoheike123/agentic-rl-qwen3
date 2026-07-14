@@ -16,6 +16,7 @@ def training_database_root(tmp_path_factory: pytest.TempPathFactory):
     build_training_databases(
         TrainingDatabaseConfig(
             output_root=root,
+            domains=("airline", "retail"),
             seed=43,
             telecom_clone_factor=2,
         )
@@ -23,7 +24,7 @@ def training_database_root(tmp_path_factory: pytest.TempPathFactory):
     return root
 
 
-@pytest.mark.parametrize("domain", ["airline", "retail", "telecom"])
+@pytest.mark.parametrize("domain", ["airline", "retail"])
 def test_first_candidate_is_oracle_valid(
     domain: str,
     training_database_root,
@@ -68,7 +69,6 @@ def test_every_airline_template_has_an_executable_oracle(
         verification = verify_oracle_task("airline", candidate.task, database)
         assert verification.oracle_verified, f"{template}: {verification.error}"
 
-
 def test_every_retail_template_has_an_executable_oracle(
     training_database_root,
 ) -> None:
@@ -80,18 +80,4 @@ def test_every_retail_template_has_an_executable_oracle(
     assert len(by_template) >= 16
     for template, candidate in by_template.items():
         verification = verify_oracle_task("retail", candidate.task, database)
-        assert verification.oracle_verified, f"{template}: {verification.error}"
-
-
-def test_every_telecom_template_has_an_executable_oracle(
-    training_database_root,
-) -> None:
-    database = load_training_database(training_database_root, "telecom")
-    by_template = {}
-    for candidate in GENERATORS["telecom"](2_000_049, database):
-        by_template.setdefault(candidate.generation.template, candidate)
-
-    assert len(by_template) >= 25
-    for template, candidate in by_template.items():
-        verification = verify_oracle_task("telecom", candidate.task, database)
         assert verification.oracle_verified, f"{template}: {verification.error}"

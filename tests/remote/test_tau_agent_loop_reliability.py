@@ -3,12 +3,15 @@ from types import MethodType
 
 import pytest
 
+pytest.importorskip("verl.experimental.agent_loop.agent_loop")
+
 import agent_rl.rollout.tau_agent_loop as loop_module
 from agent_rl.envs.tau_env import TauInfrastructureError
 from agent_rl.rollout.tau_agent_loop import (
     TauAgentLoop,
     TauAgentLoopSettings,
 )
+from agent_rl.trainer.tau_agent_loop_manager import TauAgentLoopWorker
 
 
 @pytest.fixture(autouse=True)
@@ -98,3 +101,40 @@ def test_worker_semaphore_limits_concurrent_episodes():
     asyncio.run(run_both())
 
     assert maximum_active == 1
+
+
+def test_tau_worker_forwards_rollout_index(monkeypatch):
+    captured = {}
+
+    async def parent_run(
+        self,
+        sampling_params,
+        trajectory,
+        *,
+        agent_name,
+        trace=True,
+        **kwargs,
+    ):
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(
+        loop_module,
+        "_worker_episode_semaphore",
+        None,
+    )
+    monkeypatch.setattr(
+        "verl.experimental.agent_loop.agent_loop.AgentLoopWorker._run_agent_loop",
+        parent_run,
+    )
+    worker = object.__new__(TauAgentLoopWorker)
+    asyncio.run(
+        worker._run_agent_loop(
+            {},
+            {"rollout_n": 3, "step": 7, "validate": False},
+            agent_name="tau_agent",
+        )
+    )
+    assert captured["rollout_n"] == 3
+    assert captured["trajectory_step"] == 7
+    assert captured["validate"] is False

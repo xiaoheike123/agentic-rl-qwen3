@@ -1,4 +1,4 @@
-"""Build a verified, clean-room three-domain synthetic corpus."""
+"""Build a verified, clean-room synthetic corpus for selected domains."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from agent_rl.data.synthetic.generators import GENERATORS
 from agent_rl.data.synthetic.generators.common import GENERATOR_VERSION
 from agent_rl.data.synthetic.policy_validation import validate_candidate_policy
 from agent_rl.data.synthetic.schema import (
+    DEFAULT_TRAINING_DOMAINS,
     SUPPORTED_DOMAINS,
     SyntheticSplit,
     SyntheticTaskRecord,
@@ -33,7 +34,7 @@ from agent_rl.data.synthetic.verifier import verify_oracle_task
 @dataclass(frozen=True, slots=True)
 class SyntheticBuildConfig:
     output_root: Path
-    domains: tuple[str, ...] = ("airline", "retail", "telecom")
+    domains: tuple[str, ...] = DEFAULT_TRAINING_DOMAINS
     seed: int = 42
     validation_fraction: float = 0.15
     max_train_per_domain: int | None = None
@@ -94,6 +95,7 @@ def validate_corpus_manifest(config: SyntheticBuildConfig) -> None:
         manifest = json.load(stream)
     training_config = TrainingDatabaseConfig(
         output_root=config.resolved_training_database_root,
+        domains=config.domains,
         seed=config.seed,
         telecom_clone_factor=config.telecom_clone_factor,
     )
@@ -161,6 +163,7 @@ def build_synthetic_corpus(config: SyntheticBuildConfig) -> SyntheticBuildReport
     config.output_root.mkdir(parents=True, exist_ok=True)
     training_config = TrainingDatabaseConfig(
         output_root=config.resolved_training_database_root,
+        domains=config.domains,
         seed=config.seed,
         telecom_clone_factor=config.telecom_clone_factor,
     )
@@ -305,7 +308,7 @@ def main() -> None:
         "--domains",
         nargs="+",
         choices=sorted(SUPPORTED_DOMAINS),
-        default=["airline", "retail", "telecom"],
+        default=list(DEFAULT_TRAINING_DOMAINS),
     )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--validation-fraction", type=float, default=0.15)

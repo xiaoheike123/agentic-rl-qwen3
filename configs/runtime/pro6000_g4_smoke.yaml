@@ -1,10 +1,10 @@
 model_path: /root/autodl-tmp/models/Qwen3-8B
 output_root: /root/autodl-tmp/agent-rl-outputs
 dataset_root: /root/autodl-tmp/agent-rl-data
-train_batch_size: 30
+train_batch_size: 8
 rollout_group_size: 4
 evaluation_trials: 1
-ppo_mini_batch_size: 30
+ppo_mini_batch_size: 8
 ppo_micro_batch_size_per_gpu: 1
 ppo_epochs: 1
 optimizer_lr: 1.0e-5
@@ -14,8 +14,8 @@ total_epochs: 1
 save_freq: 1
 test_freq: -1
 val_before_train: false
-resume_mode: auto
-max_actor_ckpt_to_keep: 2
+resume_mode: disable
+max_actor_ckpt_to_keep: 1
 seed: 42
 n_gpus_per_node: 1
 nnodes: 1

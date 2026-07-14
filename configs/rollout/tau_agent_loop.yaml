@@ -1,8 +1,8 @@
 - name: tau_agent
   _target_: agent_rl.rollout.tau_agent_loop.TauAgentLoop
   settings:
-    max_steps: 30
-    user_llm: deepseek/deepseek-v4-flash
+    max_steps: 16
+    user_llm: deepseek/deepseek-v4-pro
     user_llm_args:
       temperature: 0.0
     evaluator_llm: deepseek/deepseek-v4-pro
@@ -16,7 +16,7 @@
     enable_hindsight_credit: false
     hindsight_config: null
     context_max_chars: 24000
-    max_action_tokens: 2048
+    max_action_tokens: 256
     max_episode_attempts: 3
     retry_backoff_seconds: 1.0
     max_concurrent_episodes_per_worker: 1

@@ -21,9 +21,18 @@ from tau2.domains.telecom.utils import TELECOM_DB_PATH
 def _config(root: Path) -> TrainingDatabaseConfig:
     return TrainingDatabaseConfig(
         output_root=root,
+        domains=("airline", "retail", "telecom"),
         seed=43,
         telecom_clone_factor=2,
     )
+
+
+def test_default_training_database_scope_is_airline_and_retail(tmp_path: Path) -> None:
+    config = TrainingDatabaseConfig(output_root=tmp_path / "default")
+    manifest = build_training_databases(config)
+
+    assert config.domains == ("airline", "retail")
+    assert set(manifest["domains"]) == {"airline", "retail"}
 
 
 def test_training_database_is_reproducible_and_portable(tmp_path: Path) -> None:
