@@ -3,6 +3,7 @@ aggregation: sequence
 verl_loss_mode: vanilla
 verl_loss_agg_mode: seq-mean-token-mean
 use_kl_loss: true
-bypass_mode: false
+bypass_mode: true
+bypass_loss_type: ppo_clip
 clip_ratio_low: 0.2
 clip_ratio_high: 0.2

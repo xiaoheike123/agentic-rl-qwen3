@@ -189,7 +189,14 @@ def build_verl_command(config: ExperimentConfig) -> list[str]:
         "verl.trainer.main_ppo",
         _override("algorithm.adv_estimator", _advantage_estimator(config)),
         _override("algorithm.use_kl_in_reward", False),
-        _override("algorithm.rollout_correction.bypass_mode", False),
+        _override(
+            "algorithm.rollout_correction.bypass_mode",
+            bool(algorithm.get("bypass_mode", False)),
+        ),
+        _override(
+            "algorithm.rollout_correction.loss_type",
+            algorithm.get("bypass_loss_type", "ppo_clip"),
+        ),
         _override("data.train_files", [str(train_path)]),
         _override("data.val_files", [str(validation_path)]),
         _override("data.train_batch_size", runtime["train_batch_size"]),
@@ -252,7 +259,10 @@ def build_verl_command(config: ExperimentConfig) -> list[str]:
         _override("actor_rollout_ref.actor.use_dynamic_bsz", True),
         _override(
             "actor_rollout_ref.actor.ppo_max_token_len_per_gpu",
-            prompt_length + response_length,
+            runtime.get(
+                "ppo_max_token_len_per_gpu",
+                prompt_length + response_length,
+            ),
         ),
         _override("actor_rollout_ref.rollout.name", "vllm"),
         _override("actor_rollout_ref.rollout.mode", "async"),
@@ -275,6 +285,7 @@ def build_verl_command(config: ExperimentConfig) -> list[str]:
         _override("actor_rollout_ref.rollout.free_cache_engine", True),
         _override("actor_rollout_ref.rollout.enable_chunked_prefill", True),
         _override("actor_rollout_ref.rollout.enable_prefix_caching", True),
+        _override("actor_rollout_ref.rollout.calculate_log_probs", True),
         _override("actor_rollout_ref.rollout.agent.default_agent_loop", "tau_agent"),
         _override(
             "actor_rollout_ref.rollout.agent.agent_loop_config_path",

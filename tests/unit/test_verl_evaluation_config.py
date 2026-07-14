@@ -46,6 +46,39 @@ def test_lora_protocol_is_explicit_in_command(monkeypatch) -> None:
     assert "actor_rollout_ref.actor.fsdp_config.use_orig_params=true" in command
     assert "algorithm.rollout_correction.bypass_mode=false" in command
     assert "actor_rollout_ref.rollout.free_cache_engine=true" in command
+    assert "actor_rollout_ref.rollout.calculate_log_probs=true" in command
+
+
+def test_token_budget_probe_changes_scheduling_only(monkeypatch) -> None:
+    command = _command(monkeypatch, "g4_perf_tokens32k.yaml")
+    assert "actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=1" in command
+    assert "actor_rollout_ref.actor.ppo_max_token_len_per_gpu=32768" in command
+    assert "actor_rollout_ref.rollout.max_num_batched_tokens=32768" in command
+    assert "algorithm.rollout_correction.bypass_mode=false" in command
+
+
+def test_micro_batch_probe_changes_micro_batch_only(monkeypatch) -> None:
+    command = _command(monkeypatch, "g4_perf_micro2.yaml")
+    assert "actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=2" in command
+    assert "actor_rollout_ref.actor.ppo_max_token_len_per_gpu=32768" in command
+    assert "actor_rollout_ref.rollout.max_num_batched_tokens=32768" in command
+    assert "actor_rollout_ref.rollout.agent.num_workers=8" in command
+
+
+def test_concurrency_probe_uses_sixteen_isolated_workers(monkeypatch) -> None:
+    command = _command(monkeypatch, "g4_perf_concurrency16.yaml")
+    assert "actor_rollout_ref.rollout.agent.num_workers=16" in command
+    assert "actor_rollout_ref.rollout.max_num_seqs=16" in command
+
+
+def test_bypass_probe_is_explicit_and_keeps_rollout_logprobs(monkeypatch) -> None:
+    command = _command(monkeypatch, "g4_bypass_on.yaml")
+    assert "algorithm.rollout_correction.bypass_mode=true" in command
+    assert "algorithm.rollout_correction.loss_type=ppo_clip" in command
+    assert "actor_rollout_ref.rollout.calculate_log_probs=true" in command
+    assert "actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=2" in command
+    assert "actor_rollout_ref.rollout.max_num_batched_tokens=32768" in command
+    assert "actor_rollout_ref.rollout.agent.num_workers=16" in command
 
 
 def test_output_root_override_applies_to_every_verl_artifact(monkeypatch) -> None:

@@ -61,6 +61,10 @@ def validate_experiment_config(config: ExperimentConfig) -> None:
         "E5": ("balanced", "outcome", True),
     }
     if config.experiment in expected:
+        if bool(config.algorithm.get("bypass_mode", False)):
+            raise ValueError(
+                f"{config.experiment} must keep bypass disabled for the formal matrix"
+            )
         aggregation, reward_mode, has_credit = expected[config.experiment]
         actual = (
             config.algorithm.get("aggregation"),

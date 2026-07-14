@@ -21,8 +21,8 @@ git submodule status
 nvidia-smi
 ```
 
-Expected local baseline: 76 passing tests; GPU-only remote tests add coverage
-for torch, VERL, and the custom worker.
+Expected local baseline: 82 passing and two GPU/VERL-dependent skips. The
+remote runtime must activate those two skipped checks.
 
 ## 3. Verify locked datasets
 
@@ -89,6 +89,10 @@ Keep G=4 only when the report recommendation is `KEEP_G4`. A lower result is a
 diagnostic decision, not permission to inspect the official test set.
 
 ## 6. E0 and formal training
+
+Before formal training, complete
+[`performance_validation_checklist.md`](performance_validation_checklist.md)
+and freeze one execution profile for every E1-E5 run.
 
 ```bash
 bash scripts/train/train_experiment.sh configs/train/e0_base_eval.yaml

@@ -1,0 +1,10 @@
+experiment: G4_PERF_MICRO2
+train_task_limit: 8
+performance_probe: true
+model_config: configs/model/qwen3_8b_lora.yaml
+env_config: configs/env/tau_airline.yaml
+algorithm_config: configs/algorithm/grpo_sequence.yaml
+rollout_config: configs/rollout/sync.yaml
+reward_config: configs/reward/outcome.yaml
+credit_config: null
+runtime_config: configs/runtime/pro6000_g4_micro2.yaml
