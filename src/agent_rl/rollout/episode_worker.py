@@ -162,7 +162,10 @@ def _collect_tool_results(
 
         call_id = message.get("id")
         if not isinstance(call_id, str) or not call_id.strip():
-            raise EpisodeDataError("tau2 ToolMessage contains no call ID")
+            # tau2 can emit tool-like messages that are not tied to a model
+            # tool call. They cannot be hydrated back into our trajectory, so
+            # skip them and let real missing call IDs be handled below.
+            continue
 
         is_error = message.get("error", False)
         if not isinstance(is_error, bool):
@@ -196,101 +199,6 @@ def _collect_tool_results(
             continue
 
         results[call_id] = candidate
-
-    return results
-    messages = simulation_run.get("messages") or []
-
-    if not isinstance(messages, list):
-        raise EpisodeDataError("simulation_run.messages must be a list")
-
-    results: dict[str, dict[str, Any]] = {}
-
-    for message in messages:
-        if not isinstance(message, dict):
-            raise EpisodeDataError("simulation_run contains a non-object message")
-
-        if message.get("role") != "tool":
-            continue
-
-        if message.get("requestor", "assistant") != "assistant":
-            continue
-
-        call_id = message.get("id")
-        if not isinstance(call_id, str) or not call_id.strip():
-            raise EpisodeDataError("tau2 ToolMessage contains no call ID")
-
-        is_error = message.get("error", False)
-        if not isinstance(is_error, bool):
-            raise EpisodeDataError(
-                f"tool result {call_id!r} has a non-boolean error field"
-            )
-
-        content = deepcopy(message.get("content"))
-        error_message: str | None = None
-
-        if is_error:
-            error_message = (
-                str(content) if content is not None else "tool call failed"
-            )
-
-        candidate = {
-            "result": content,
-            "error": error_message,
-        }
-
-        if call_id in results:
-            if results[call_id] == candidate:
-                continue
-
-            raise EpisodeDataError(
-                f"tau2 returned conflicting tool results for ID {call_id!r}"
-            )
-
-        results[call_id] = candidate
-
-    return results    
-    messages = simulation_run.get("messages") or []
-
-    if not isinstance(messages, list):
-        raise EpisodeDataError("simulation_run.messages must be a list")
-
-    results: dict[str, dict[str, Any]] = {}
-
-    for message in messages:
-        if not isinstance(message, dict):
-            raise EpisodeDataError("simulation_run contains a non-object message")
-
-        if message.get("role") != "tool":
-            continue
-
-        if message.get("requestor", "assistant") != "assistant":
-            continue
-
-        call_id = message.get("id")
-        if not isinstance(call_id, str) or not call_id.strip():
-            raise EpisodeDataError("tau2 ToolMessage contains no call ID")
-
-        if call_id in results:
-            raise EpisodeDataError(
-                f"tau2 returned duplicate tool result ID {call_id!r}"
-            )
-
-        is_error = message.get("error", False)
-        if not isinstance(is_error, bool):
-            raise EpisodeDataError(
-                f"tool result {call_id!r} has a non-boolean error field"
-            )
-
-        content = deepcopy(message.get("content"))
-        error_message: str | None = None
-
-        if is_error:
-            error_message = str(content) if content is not None else "tool call failed"
-
-        results[call_id] = {
-            "result": content,
-            "error": error_message,
-        }
 
     return results
 

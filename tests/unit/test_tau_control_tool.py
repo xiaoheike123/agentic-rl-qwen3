@@ -3,7 +3,7 @@ import pytest
 from agent_rl.data.schemas import EpisodeRecord, ToolCallRecord, TurnRecord
 from agent_rl.rewards.environment_checks import collect_tool_executions
 from agent_rl.rollout.episode_worker import (
-    EpisodeDataError, 
+    EpisodeDataError,
     _collect_tool_results,
     _hydrate_tool_results,
 )
@@ -72,6 +72,37 @@ def test_missing_environment_tool_result_remains_an_error() -> None:
             {"termination_reason": "agent_stop", "messages": []},
             strict=True,
         )
+
+
+def test_tau_tool_message_without_call_id_is_ignored() -> None:
+    results = _collect_tool_results(
+        {
+            "messages": [
+                {
+                    "role": "tool",
+                    "requestor": "assistant",
+                    "content": {"status": "orphan"},
+                    "error": False,
+                },
+                {
+                    "role": "tool",
+                    "requestor": "assistant",
+                    "id": "call_15",
+                    "content": {"status": "ok"},
+                    "error": False,
+                },
+            ]
+        }
+    )
+
+    assert results == {
+        "call_15": {
+            "result": {"status": "ok"},
+            "error": None,
+        }
+    }
+
+
 def test_identical_duplicate_tool_results_are_deduplicated() -> None:
     message = {
         "role": "tool",
@@ -93,7 +124,7 @@ def test_identical_duplicate_tool_results_are_deduplicated() -> None:
     }
 
 
-def test_conflicting_duplicate_tool_results_are_rejected() -> None:
+def test_conflicting_duplicate_tool_results_keep_first_success() -> None:
     simulation_run = {
         "messages": [
             {
@@ -113,8 +144,37 @@ def test_conflicting_duplicate_tool_results_are_rejected() -> None:
         ]
     }
 
-    with pytest.raises(
-        EpisodeDataError,
-        match="conflicting tool results",
-    ):
-        _collect_tool_results(simulation_run)
+    assert _collect_tool_results(simulation_run) == {
+        "call_15": {
+            "result": {"status": "ok"},
+            "error": None,
+        }
+    }
+
+
+def test_duplicate_tool_result_prefers_success_over_error() -> None:
+    simulation_run = {
+        "messages": [
+            {
+                "role": "tool",
+                "requestor": "assistant",
+                "id": "call_15",
+                "content": "temporary failure",
+                "error": True,
+            },
+            {
+                "role": "tool",
+                "requestor": "assistant",
+                "id": "call_15",
+                "content": {"status": "ok"},
+                "error": False,
+            },
+        ]
+    }
+
+    assert _collect_tool_results(simulation_run) == {
+        "call_15": {
+            "result": {"status": "ok"},
+            "error": None,
+        }
+    }
