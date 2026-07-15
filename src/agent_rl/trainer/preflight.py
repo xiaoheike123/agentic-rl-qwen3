@@ -57,8 +57,8 @@ def validate_experiment_config(config: ExperimentConfig) -> None:
             raise ValueError("formal GRPO group size must be 4")
         if int(config.runtime["ppo_epochs"]) != 1:
             raise ValueError("PPO epochs must be 1")
-        if int(config.runtime["total_epochs"]) != 1:
-            raise ValueError("start every independent experiment at one epoch")
+        if int(config.runtime["total_epochs"]) != 75:
+            raise ValueError("formal training runtime must target 75 global steps")
         if bool(config.runtime["val_before_train"]):
             raise ValueError("official test evaluation is forbidden during training")
         if int(config.runtime["test_freq"]) != -1:
@@ -69,7 +69,7 @@ def validate_experiment_config(config: ExperimentConfig) -> None:
         "E2": ("balanced", "outcome", False),
         "E3": ("sequence", "environment_process", False),
         "E4": ("sequence", "outcome", True),
-        "E5": ("balanced", "outcome", True),
+        "E5": ("balanced", "environment_process", True),
     }
     if config.experiment in expected:
         if bool(config.algorithm.get("bypass_mode", False)):
