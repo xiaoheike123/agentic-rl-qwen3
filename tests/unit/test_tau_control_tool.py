@@ -72,7 +72,123 @@ def test_missing_environment_tool_result_remains_an_error() -> None:
             {"termination_reason": "agent_stop", "messages": []},
             strict=True,
         )
+def test_max_steps_allows_missing_result_only_on_final_environment_turn() -> None:
+    episode = _episode_with_call(name="search", is_control=False)
 
+    missing = _hydrate_tool_results(
+        episode,
+        {"termination_reason": "max_steps", "messages": []},
+        strict=True,
+    )
+
+    turn = episode.turns[0]
+    call = turn.tool_calls[0]
+
+    assert missing == ["call_9"]
+    assert turn.truncated is True
+    assert turn.info["max_steps_truncated_tool_call_ids"] == ["call_9"]
+    assert call.result_received is False
+    assert call.result is None
+    assert call.error is None
+
+
+def test_max_steps_does_not_allow_missing_result_from_earlier_turn() -> None:
+    episode = EpisodeRecord(
+        episode_id="episode-1",
+        group_id="group-1",
+        domain="airline",
+        task_id="task-1",
+        model="Qwen3-8B",
+        turns=[
+            TurnRecord(
+                turn_index=0,
+                observation="first observation",
+                prompt_messages=[
+                    {"role": "user", "content": "first observation"}
+                ],
+                action="first_search",
+                next_observation="second observation",
+                tool_calls=[
+                    ToolCallRecord(
+                        call_id="call_1",
+                        name="first_search",
+                        is_control=False,
+                    )
+                ],
+            ),
+            TurnRecord(
+                turn_index=1,
+                observation="second observation",
+                prompt_messages=[
+                    {"role": "user", "content": "second observation"}
+                ],
+                action="second_search",
+                next_observation="",
+                tool_calls=[
+                    ToolCallRecord(
+                        call_id="call_2",
+                        name="second_search",
+                        is_control=False,
+                    )
+                ],
+                terminated=True,
+            ),
+        ],
+    )
+
+    with pytest.raises(EpisodeDataError, match="call_1"):
+        _hydrate_tool_results(
+            episode,
+            {
+                "termination_reason": "max_steps",
+                "messages": [
+                    {
+                        "role": "tool",
+                        "requestor": "assistant",
+                        "id": "call_2",
+                        "content": {"status": "ok"},
+                        "error": False,
+                    }
+                ],
+            },
+            strict=True,
+        )
+
+
+def test_call_31_with_matching_tau_result_is_hydrated_normally() -> None:
+    episode = _episode_with_call(name="create_task", is_control=False)
+    episode.turns[0].tool_calls[0].call_id = "call_31"
+
+    missing = _hydrate_tool_results(
+        episode,
+        {
+            "termination_reason": "max_steps",
+            "messages": [
+                {
+                    "role": "tool",
+                    "requestor": "assistant",
+                    "id": "call_31",
+                    "content": {
+                        "task_id": "task_2",
+                        "title": "Important Meeting",
+                    },
+                    "error": False,
+                }
+            ],
+        },
+        strict=True,
+    )
+
+    call = episode.turns[0].tool_calls[0]
+
+    assert missing == []
+    assert call.result_received is True
+    assert call.result == {
+        "task_id": "task_2",
+        "title": "Important Meeting",
+    }
+    assert call.error is None
+    assert episode.turns[0].truncated is False
 
 def test_tau_multi_tool_message_is_flattened_and_user_results_are_ignored() -> None:
     results = _collect_tool_results(

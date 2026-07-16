@@ -238,8 +238,11 @@ def _hydrate_tool_results(
 ) -> list[str]:
     results = _collect_tool_results(simulation_run)
     termination_reason = simulation_run.get("termination_reason")
+    final_turn = episode.turns[-1] if episode.turns else None
+
     seen_call_ids: set[str] = set()
     missing_call_ids: list[str] = []
+    strict_missing_call_ids: list[str] = []
 
     for turn in episode.turns:
         for call in turn.tool_calls:
@@ -268,18 +271,39 @@ def _hydrate_tool_results(
 
             if tool_result is None:
                 missing_call_ids.append(call.call_id)
+
+                max_steps_tail_truncation = (
+                    termination_reason == "max_steps"
+                    and turn is final_turn
+                    and not call.is_control
+                )
+
+                if max_steps_tail_truncation:
+                    turn.truncated = True
+                    truncated_ids = turn.info.setdefault(
+                        "max_steps_truncated_tool_call_ids",
+                        [],
+                    )
+                    if call.call_id not in truncated_ids:
+                        truncated_ids.append(call.call_id)
+                    continue
+
+                strict_missing_call_ids.append(call.call_id)
                 continue
 
             call.result = tool_result["result"]
             call.error = tool_result["error"]
             call.result_received = True
 
-    if strict and missing_call_ids:
-        missing = ", ".join(repr(item) for item in missing_call_ids)
-        raise EpisodeDataError(f"tau2 returned no results for tool calls: {missing}")
+    if strict and strict_missing_call_ids:
+        missing = ", ".join(
+            repr(call_id) for call_id in strict_missing_call_ids
+        )
+        raise EpisodeDataError(
+            f"tau2 returned no results for tool calls: {missing}"
+        )
 
     return missing_call_ids
-
 
 def _build_reward_record(transition: TauTransition) -> RewardRecord:
     reward_info = _decode_json_object(
