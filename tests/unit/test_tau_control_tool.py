@@ -74,22 +74,28 @@ def test_missing_environment_tool_result_remains_an_error() -> None:
         )
 
 
-def test_tau_tool_message_without_call_id_is_ignored() -> None:
+def test_tau_multi_tool_message_is_flattened_and_user_results_are_ignored() -> None:
     results = _collect_tool_results(
         {
             "messages": [
                 {
                     "role": "tool",
-                    "requestor": "assistant",
-                    "content": {"status": "orphan"},
-                    "error": False,
-                },
-                {
-                    "role": "tool",
-                    "requestor": "assistant",
-                    "id": "call_15",
-                    "content": {"status": "ok"},
-                    "error": False,
+                    "tool_messages": [
+                        {
+                            "role": "tool",
+                            "requestor": "assistant",
+                            "id": "call_15",
+                            "content": {"status": "ok"},
+                            "error": False,
+                        },
+                        {
+                            "role": "tool",
+                            "requestor": "user",
+                            "id": "user_call_3",
+                            "content": {"status": "private"},
+                            "error": False,
+                        },
+                    ],
                 },
             ]
         }
@@ -101,6 +107,22 @@ def test_tau_tool_message_without_call_id_is_ignored() -> None:
             "error": None,
         }
     }
+
+
+def test_assistant_tool_message_without_call_id_is_rejected() -> None:
+    with pytest.raises(EpisodeDataError, match="contains no call ID"):
+        _collect_tool_results(
+            {
+                "messages": [
+                    {
+                        "role": "tool",
+                        "requestor": "assistant",
+                        "content": {"status": "orphan"},
+                        "error": False,
+                    }
+                ]
+            }
+        )
 
 
 def test_identical_duplicate_tool_results_are_deduplicated() -> None:

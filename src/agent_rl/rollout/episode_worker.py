@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterator
 from copy import deepcopy
 from dataclasses import asdict, dataclass
 from typing import Any
@@ -140,6 +141,29 @@ def _build_tool_call_records(output: PolicyOutput) -> list[ToolCallRecord]:
 
     return records
 
+
+def _iter_tool_result_messages(
+    message: dict[str, Any],
+) -> Iterator[dict[str, Any]]:
+    """Yield leaf ToolMessages from tau2 tool-message containers."""
+
+    nested = message.get("tool_messages")
+    if nested is not None:
+        if not isinstance(nested, list):
+            raise EpisodeDataError("tool_messages must be a list")
+
+        for child in nested:
+            if not isinstance(child, dict):
+                raise EpisodeDataError(
+                    "tool_messages contains a non-object message"
+                )
+            yield from _iter_tool_result_messages(child)
+        return
+
+    if message.get("role") == "tool":
+        yield message
+
+
 def _collect_tool_results(
     simulation_run: dict[str, Any],
 ) -> dict[str, dict[str, Any]]:
@@ -150,55 +174,56 @@ def _collect_tool_results(
 
     results: dict[str, dict[str, Any]] = {}
 
-    for message in messages:
-        if not isinstance(message, dict):
+    for top_level_message in messages:
+        if not isinstance(top_level_message, dict):
             raise EpisodeDataError("simulation_run contains a non-object message")
 
-        if message.get("role") != "tool":
-            continue
-
-        if message.get("requestor", "assistant") != "assistant":
-            continue
-
-        call_id = message.get("id")
-        if not isinstance(call_id, str) or not call_id.strip():
-            # tau2 can emit tool-like messages that are not tied to a model
-            # tool call. They cannot be hydrated back into our trajectory, so
-            # skip them and let real missing call IDs be handled below.
-            continue
-
-        is_error = message.get("error", False)
-        if not isinstance(is_error, bool):
-            raise EpisodeDataError(
-                f"tool result {call_id!r} has a non-boolean error field"
-            )
-
-        content = deepcopy(message.get("content"))
-        error_message: str | None = None
-
-        if is_error:
-            error_message = str(content) if content is not None else "tool call failed"
-
-        candidate = {
-            "result": content,
-            "error": error_message,
-        }
-
-        existing = results.get(call_id)
-        if existing is not None:
-            if existing == candidate:
+        for message in _iter_tool_result_messages(top_level_message):
+            if message.get("requestor", "assistant") != "assistant":
                 continue
 
-            # tau2 can emit duplicated tool messages for the same call id.
-            # During RL rollout this should not kill the whole batch. Prefer
-            # a successful result over an error result, otherwise keep the
-            # first result to preserve deterministic hydration.
-            if existing.get("error") is not None and candidate.get("error") is None:
-                results[call_id] = candidate
+            call_id = message.get("id")
+            if not isinstance(call_id, str) or not call_id.strip():
+                raise EpisodeDataError(
+                    "tau2 assistant ToolMessage contains no call ID"
+                )
 
-            continue
+            is_error = message.get("error", False)
+            if not isinstance(is_error, bool):
+                raise EpisodeDataError(
+                    f"tool result {call_id!r} has a non-boolean error field"
+                )
 
-        results[call_id] = candidate
+            content = deepcopy(message.get("content"))
+            error_message: str | None = None
+
+            if is_error:
+                error_message = (
+                    str(content) if content is not None else "tool call failed"
+                )
+
+            candidate = {
+                "result": content,
+                "error": error_message,
+            }
+
+            existing = results.get(call_id)
+            if existing is not None:
+                if existing == candidate:
+                    continue
+
+                # tau2 can emit duplicated tool messages for the same call id.
+                # Prefer a successful result; otherwise keep the first result
+                # so trajectory hydration remains deterministic.
+                if (
+                    existing.get("error") is not None
+                    and candidate.get("error") is None
+                ):
+                    results[call_id] = candidate
+
+                continue
+
+            results[call_id] = candidate
 
     return results
 
