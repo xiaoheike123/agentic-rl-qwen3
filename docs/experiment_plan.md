@@ -43,16 +43,14 @@ the rollout cache does not preserve the pre-update adapter.
 
 ## Checkpoint schedule
 
-Formal training is launched in two phases so that checkpoints are written only
-at the intended decision points:
+Formal training runs continuously to global step 75. It writes a resumable
+checkpoint every 5 global steps and retains only the newest checkpoint. This
+limits persistent checkpoint storage to one full verl training state while
+keeping crash recovery at most five updates behind.
 
-- Phase A: train from scratch to global step 30 and save step 30.
-- Phase B: resume from step 30, train to global step 75, and save step 75.
-
-Use `scripts/train/run_formal_phase.sh` for both phases. On the default 100GB
-AutoDL data disk, `CKPT_KEEP=1` is the safe setting because one verl training
-checkpoint is roughly one full 8B-model training state. Set `CKPT_KEEP=2` only
-after expanding the disk or moving the step-30 checkpoint elsewhere.
+Use `scripts/train/run_formal_phase.sh` for the run. Checkpoint replacement can
+briefly require space for both the old and new state, so verify free disk space
+before training even though only one checkpoint remains afterward.
 
 ## Experiments
 

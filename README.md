@@ -38,11 +38,8 @@ base model; E2 is not initialized from E1.
 # Eight train tasks x four rollouts, one update.
 bash scripts/train/train_experiment.sh configs/train/g4_preflight.yaml
 
-# Formal E1 phase A: train from scratch to step 30.
-bash scripts/train/run_formal_phase.sh configs/train/e1_grpo_sequence.yaml 30
-
-# Formal E1 phase B: resume from step 30 and train to step 75.
-bash scripts/train/run_formal_phase.sh configs/train/e1_grpo_sequence.yaml 75
+# Formal E1: train continuously to step 75. Save every 5 steps and retain one.
+bash scripts/train/run_formal_phase.sh configs/train/e1_grpo_sequence.yaml
 
 # Base-model final evaluation (80 pre-expanded rows).
 bash scripts/train/train_experiment.sh configs/train/e0_base_eval.yaml

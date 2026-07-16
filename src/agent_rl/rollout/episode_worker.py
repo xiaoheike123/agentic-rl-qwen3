@@ -184,9 +184,11 @@ def _collect_tool_results(
 
             call_id = message.get("id")
             if not isinstance(call_id, str) or not call_id.strip():
-                raise EpisodeDataError(
-                    "tau2 assistant ToolMessage contains no call ID"
-                )
+                # tau2 may emit assistant-addressed tool-like leaves that are
+                # not responses to any policy tool call. They cannot hydrate a
+                # trajectory record. Ignore them here; strict hydration below
+                # still rejects any real policy call whose result is missing.
+                continue
 
             is_error = message.get("error", False)
             if not isinstance(is_error, bool):

@@ -18,6 +18,14 @@ LORA_TARGETS = {
 TRAIN_MAX_STEPS = 64
 EVALUATION_MAX_STEPS = 200
 
+FORMAL_EXPERIMENTS = {
+    "E1": ("sequence", "outcome", False),
+    "E2": ("balanced", "outcome", False),
+    "E3": ("sequence", "environment_process", False),
+    "E4": ("sequence", "outcome", True),
+    "E5": ("balanced", "environment_process", True),
+}
+
 
 def validate_experiment_config(config: ExperimentConfig) -> None:
     evaluation_only = bool(config.raw.get("evaluation_only", False))
@@ -57,26 +65,23 @@ def validate_experiment_config(config: ExperimentConfig) -> None:
             raise ValueError("formal GRPO group size must be 4")
         if int(config.runtime["ppo_epochs"]) != 1:
             raise ValueError("PPO epochs must be 1")
-        if int(config.runtime["total_epochs"]) != 75:
-            raise ValueError("formal training runtime must target 75 global steps")
         if bool(config.runtime["val_before_train"]):
             raise ValueError("official test evaluation is forbidden during training")
         if int(config.runtime["test_freq"]) != -1:
             raise ValueError("official test evaluation is forbidden during training")
 
-    expected = {
-        "E1": ("sequence", "outcome", False),
-        "E2": ("balanced", "outcome", False),
-        "E3": ("sequence", "environment_process", False),
-        "E4": ("sequence", "outcome", True),
-        "E5": ("balanced", "environment_process", True),
-    }
-    if config.experiment in expected:
+    if config.experiment in FORMAL_EXPERIMENTS:
+        if int(config.runtime["total_epochs"]) != 75:
+            raise ValueError("formal training runtime must target 75 global steps")
+        if int(config.runtime["save_freq"]) != 5:
+            raise ValueError("formal training must checkpoint every 5 global steps")
+        if int(config.runtime["max_actor_ckpt_to_keep"]) != 1:
+            raise ValueError("formal training must retain only the latest checkpoint")
         if bool(config.algorithm.get("bypass_mode", False)):
             raise ValueError(
                 f"{config.experiment} must keep bypass disabled for the formal matrix"
             )
-        aggregation, reward_mode, has_credit = expected[config.experiment]
+        aggregation, reward_mode, has_credit = FORMAL_EXPERIMENTS[config.experiment]
         actual = (
             config.algorithm.get("aggregation"),
             config.reward.get("mode"),

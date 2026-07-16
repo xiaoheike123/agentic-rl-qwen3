@@ -29,6 +29,10 @@ def test_official_eval_uses_preexpanded_four_seed_rows(monkeypatch) -> None:
 def test_training_uses_group_four_without_test_validation(monkeypatch) -> None:
     command = _command(monkeypatch, "e1_grpo_sequence.yaml")
     assert "actor_rollout_ref.rollout.n=4" in command
+    assert "trainer.total_epochs=75" in command
+    assert "trainer.save_freq=5" in command
+    assert "trainer.resume_mode=auto" in command
+    assert "trainer.max_actor_ckpt_to_keep=1" in command
     assert "trainer.val_before_train=false" in command
     assert "trainer.test_freq=-1" in command
     assert "trainer.val_only=true" not in command
