@@ -3,7 +3,7 @@ group_size: 4
 temperature: 0.8
 top_p: 0.95
 max_action_tokens: 256
-max_concurrent_episodes: 8
+max_concurrent_episodes: 24
 max_episode_attempts: 3
 retry_backoff_seconds: 1.0
 freeze_policy_during_collection: true
