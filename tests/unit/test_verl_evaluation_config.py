@@ -18,6 +18,26 @@ def _command(monkeypatch, config_name: str) -> list[str]:
     return verl_entry.build_verl_command(config)
 
 
+def test_verl_subprocess_environment_loads_algorithm_registry(monkeypatch) -> None:
+    monkeypatch.delenv("VERL_USE_EXTERNAL_MODULES", raising=False)
+
+    environment = verl_entry._verl_subprocess_environment()
+
+    assert environment["VERL_USE_EXTERNAL_MODULES"] == (
+        "agent_rl.trainer.verl_algorithms"
+    )
+
+
+def test_verl_subprocess_environment_preserves_other_modules(monkeypatch) -> None:
+    monkeypatch.setenv("VERL_USE_EXTERNAL_MODULES", "example.plugin")
+
+    environment = verl_entry._verl_subprocess_environment()
+
+    assert environment["VERL_USE_EXTERNAL_MODULES"] == (
+        "example.plugin,agent_rl.trainer.verl_algorithms"
+    )
+
+
 def test_official_eval_uses_preexpanded_four_seed_rows(monkeypatch) -> None:
     command = _command(monkeypatch, "e0_base_eval.yaml")
     assert "actor_rollout_ref.rollout.n=1" in command

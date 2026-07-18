@@ -15,6 +15,24 @@ from agent_rl.trainer.config_adapter import ExperimentConfig, load_experiment_co
 from agent_rl.trainer.preflight import validate_experiment_config
 
 
+_VERL_ALGORITHMS_MODULE = "agent_rl.trainer.verl_algorithms"
+
+
+def _verl_subprocess_environment() -> dict[str, str]:
+    """Load custom verl registries in the driver and every Ray child process."""
+
+    environment = os.environ.copy()
+    external_modules = [
+        module.strip()
+        for module in environment.get("VERL_USE_EXTERNAL_MODULES", "").split(",")
+        if module.strip()
+    ]
+    if _VERL_ALGORITHMS_MODULE not in external_modules:
+        external_modules.append(_VERL_ALGORITHMS_MODULE)
+    environment["VERL_USE_EXTERNAL_MODULES"] = ",".join(external_modules)
+    return environment
+
+
 def _stringify(value: Any) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
@@ -369,7 +387,11 @@ def main() -> None:
     print("Launching:")
     print(" ".join(command))
     if not args.dry_run:
-        subprocess.run(command, check=True)
+        subprocess.run(
+            command,
+            check=True,
+            env=_verl_subprocess_environment(),
+        )
 
 
 if __name__ == "__main__":
