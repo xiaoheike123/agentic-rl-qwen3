@@ -19,10 +19,10 @@ class ProcessRewardConfig:
 
     tool_success_reward: float = 0.0
     invalid_action_penalty: float = 1.0
-    tool_error_penalty: float = 1.0
+    tool_error_penalty: float = 0.25
     missing_result_penalty: float = 1.0
-    recovery_bonus: float = 0.5
-    unresolved_error_penalty: float = 0.5
+    recovery_bonus: float = 0.25
+    unresolved_error_penalty: float = 0.0
     abnormal_truncation_penalty: float = 1.0
     repeated_call_diagnostic_after: int = 2
     minimum_score: float = -1.0
@@ -170,6 +170,7 @@ class EnvironmentProcessReward:
                         passed=True,
                         evidence={
                             "error_turn_index": recovery.error_turn_index,
+                            "match_kind": recovery.match_kind,
                         },
                     )
                 )
@@ -182,7 +183,10 @@ class EnvironmentProcessReward:
                         turn_index=recovery.error_turn_index,
                         score=score,
                         passed=False,
-                        evidence={"recovery_turn_index": None},
+                        evidence={
+                            "recovery_turn_index": None,
+                            "base_tool_error_penalty_applied": True,
+                        },
                     )
                 )
 

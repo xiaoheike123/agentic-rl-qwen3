@@ -330,15 +330,41 @@ class TauAgentLoop(AgentLoopBase):
                     tool_calls=model_calls,
                 )
             except ActionFormatError as error:
+                invalid_decoded_output = self.tokenizer.decode(
+                    generated_ids,
+                    skip_special_tokens=False,
+                )
+                episode.append_turn(
+                    TurnRecord(
+                        turn_index=len(episode.turns),
+                        observation=current_observation,
+                        prompt_messages=messages.copy(),
+                        action=invalid_decoded_output.strip() or "<invalid_action>",
+                        next_observation=current_observation,
+                        assistant_message={
+                            "role": "assistant",
+                            "content": content or None,
+                            "tool_calls": [],
+                        },
+                        token_trace=TokenTrace(
+                            response_token_ids=generated_ids,
+                            response_logprobs=(
+                                list(output.log_probs) if output.log_probs else []
+                            ),
+                            response_loss_mask=[1] * len(generated_ids),
+                        ),
+                        terminated=True,
+                        info={
+                            "action_parse_valid": False,
+                            "action_parse_error": str(error),
+                        },
+                    )
+                )
                 attempted_turns = len(turn_token_spans)
 
-                episode.reward = RewardRecord(
-                    outcome=0.0,
-                    process=0.0,
-                    total=0.0,
-                )
-                episode.fail(
-                    error=f"ActionFormatError: {error}",
+                episode.finish(
+                    reward=RewardRecord(outcome=0.0, total=0.0),
+                    success=False,
                     termination_reason="invalid_action",
                 )
 
@@ -369,12 +395,10 @@ class TauAgentLoop(AgentLoopBase):
                     database_source=database_source,
                     context_rotations=context_rotations,
                     attempted_turns=attempted_turns,
+                    turn_token_spans=turn_token_spans,
                     invalid_action_error=str(error),
                     invalid_token_ids=generated_ids,
-                    invalid_decoded_output=self.tokenizer.decode(
-                        generated_ids,
-                        skip_special_tokens=False,
-                    ),
+                    invalid_decoded_output=invalid_decoded_output,
                 )
 
             tool_records = [
@@ -578,6 +602,7 @@ class TauAgentLoop(AgentLoopBase):
         database_source: str,
         context_rotations: int,
         attempted_turns: int,
+        turn_token_spans: list[tuple[int, int, int]],
         invalid_action_error: str,
         invalid_token_ids: list[int],
         invalid_decoded_output: str,
@@ -587,17 +612,22 @@ class TauAgentLoop(AgentLoopBase):
         kept_response_ids = response_ids[:response_limit]
         kept_response_mask = response_mask[:response_limit]
         kept_response_logprobs = response_logprobs[:response_limit]
+        reward_score, credit_evidence = self._score_completed_episode(
+            episode,
+            turn_token_spans,
+            len(kept_response_ids),
+        )
 
         return AgentLoopOutput(
             prompt_ids=prompt_ids,
             response_ids=kept_response_ids,
             response_mask=kept_response_mask,
             response_logprobs=kept_response_logprobs,
-            reward_score=0.0,
+            reward_score=reward_score,
             num_turns=attempted_turns,
             metrics=metrics,
             extra_fields={
-                "tau_hindsight_evidence": [0.0] * len(kept_response_ids),
+                "tau_hindsight_evidence": credit_evidence,
                 "reward_extra_info": {
                     "tau_episode_id": episode.episode_id,
                     "tau_group_id": group_id,
@@ -606,8 +636,8 @@ class TauAgentLoop(AgentLoopBase):
                     "tau_domain": domain,
                     "tau_task_id": task_id,
                     "tau_success": False,
-                    "tau_outcome_reward": 0.0,
-                    "tau_process_reward": 0.0,
+                    "tau_outcome_reward": float(episode.reward.outcome or 0.0),
+                    "tau_process_reward": float(episode.reward.process or 0.0),
                     "tau_total_turns": attempted_turns,
                     "tau_prompt_tokens": len(prompt_ids),
                     "tau_response_tokens": sum(kept_response_mask),
@@ -617,7 +647,7 @@ class TauAgentLoop(AgentLoopBase):
                     "tau_hit_max_turns": (
                         attempted_turns >= self.settings.max_steps
                     ),
-                    "tau_retained_credit_turns": 0,
+                    "tau_retained_credit_turns": len(turn_token_spans),
                     "tau_context_rotations": context_rotations,
                     "tau_database_source": database_source,
                     "tau_termination_reason": episode.termination_reason,
@@ -662,6 +692,19 @@ class TauAgentLoop(AgentLoopBase):
             success=outcome >= 1.0,
             termination_reason=termination_reason,
         )
+        return self._score_completed_episode(
+            episode,
+            turn_token_spans,
+            response_length,
+        )
+
+    def _score_completed_episode(
+        self,
+        episode: EpisodeRecord,
+        turn_token_spans: list[tuple[int, int, int]],
+        response_length: int,
+    ) -> tuple[float, list[float]]:
+        """Apply the shared process, mixed-reward, and credit pipeline."""
         process = self.process_reward.evaluate(episode)
         mixed = self.reward_mixer.mix(episode, process)
 

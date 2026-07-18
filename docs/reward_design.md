@@ -20,9 +20,11 @@ Reward code must not depend on an LLM judge for the primary training signal.
 Natural-language policy compliance and confirmation are left to tau2's
 official outcome evaluator unless a deterministic verifier is added later.
 An ordinary successful tool call receives no positive process reward; this
-prevents reward hacking through unnecessary but executable calls. Recovery is
-credited only when a later successful call matches the failed tool and exact
-arguments.
+prevents reward hacking through unnecessary but executable calls. A tool error
+receives a small penalty. Recovery is credited when a later call to the same
+tool succeeds, including a corrected retry with changed arguments. An
+unresolved error is recorded diagnostically but is not penalized a second time.
+Protocol failures such as a missing tool result remain hard errors.
 
 Invalid actions are detected with tau2's own action parser and penalized at the
 responsible turn. Reaching tau2's maximum-step termination or a local

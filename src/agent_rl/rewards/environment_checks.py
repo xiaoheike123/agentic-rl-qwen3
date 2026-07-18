@@ -43,6 +43,7 @@ class RecoveryEvidence:
 
     error_turn_index: int
     recovery_turn_index: int | None
+    match_kind: str | None = None
 
     @property
     def recovered(self) -> bool:
@@ -72,7 +73,13 @@ def collect_tool_executions(
 def find_error_recoveries(
     executions: tuple[ToolExecutionEvidence, ...],
 ) -> tuple[RecoveryEvidence, ...]:
-    """Match each error to the first later successful tool execution."""
+    """Match each error to a later successful retry of the same tool.
+
+    Exact arguments identify a literal retry. A later success from the same
+    tool with different arguments identifies a corrected retry. Requiring an
+    exact fingerprint alone misses the common case where the model fixes the
+    argument that caused the environment error.
+    """
 
     recoveries: list[RecoveryEvidence] = []
 
@@ -81,16 +88,25 @@ def find_error_recoveries(
             continue
 
         recovery_turn_index: int | None = None
+        match_kind: str | None = None
 
         for candidate in executions[index + 1 :]:
-            if candidate.succeeded and candidate.fingerprint == execution.fingerprint:
-                recovery_turn_index = candidate.turn_index
-                break
+            if not candidate.succeeded or candidate.name != execution.name:
+                continue
+
+            recovery_turn_index = candidate.turn_index
+            match_kind = (
+                "exact_retry"
+                if candidate.fingerprint == execution.fingerprint
+                else "corrected_retry"
+            )
+            break
 
         recoveries.append(
             RecoveryEvidence(
                 error_turn_index=execution.turn_index,
                 recovery_turn_index=recovery_turn_index,
+                match_kind=match_kind,
             )
         )
 
