@@ -256,6 +256,31 @@ def test_max_steps_allows_missing_result_only_on_final_environment_turn() -> Non
     assert call.error is None
 
 
+def test_max_steps_rejects_submitted_call_without_result() -> None:
+    episode = _episode_with_call(name="search", is_control=False)
+
+    with pytest.raises(EpisodeDataError, match="call_9"):
+        _hydrate_tool_results(
+            episode,
+            {
+                "termination_reason": "max_steps",
+                "messages": [
+                    {
+                        "role": "assistant",
+                        "tool_calls": [
+                            {
+                                "id": "call_9",
+                                "name": "search",
+                                "arguments": {},
+                            }
+                        ],
+                    }
+                ],
+            },
+            strict=True,
+        )
+
+
 def test_max_steps_does_not_allow_missing_result_from_earlier_turn() -> None:
     episode = EpisodeRecord(
         episode_id="episode-1",
@@ -317,6 +342,100 @@ def test_max_steps_does_not_allow_missing_result_from_earlier_turn() -> None:
             },
             strict=True,
         )
+
+
+def test_max_steps_preserves_uncommitted_tool_call_at_recorded_tail() -> None:
+    episode = EpisodeRecord(
+        episode_id="episode-1",
+        group_id="group-1",
+        domain="airline",
+        task_id="task-1",
+        model="Qwen3-8B",
+        turns=[
+            TurnRecord(
+                turn_index=0,
+                observation="first observation",
+                prompt_messages=[
+                    {"role": "user", "content": "first observation"}
+                ],
+                action="resolved_search",
+                next_observation="second observation",
+                tool_calls=[
+                    ToolCallRecord(
+                        call_id="call_30",
+                        name="resolved_search",
+                        is_control=False,
+                    )
+                ],
+            ),
+            TurnRecord(
+                turn_index=1,
+                observation="second observation",
+                prompt_messages=[
+                    {"role": "user", "content": "second observation"}
+                ],
+                action="boundary_search",
+                next_observation="terminal observation",
+                tool_calls=[
+                    ToolCallRecord(
+                        call_id="call_31",
+                        name="boundary_search",
+                        is_control=False,
+                    )
+                ],
+            ),
+            TurnRecord(
+                turn_index=2,
+                observation="terminal observation",
+                prompt_messages=[
+                    {"role": "user", "content": "terminal observation"}
+                ],
+                action="terminal text",
+                next_observation="",
+                truncated=True,
+            ),
+        ],
+    )
+
+    missing = _hydrate_tool_results(
+        episode,
+        {
+            "termination_reason": "max_steps",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "id": "call_30",
+                            "name": "resolved_search",
+                            "arguments": {},
+                        }
+                    ],
+                },
+                {
+                    "role": "tool",
+                    "requestor": "assistant",
+                    "id": "call_30",
+                    "content": {"status": "ok"},
+                    "error": False,
+                },
+            ],
+        },
+        strict=True,
+    )
+
+    resolved_call = episode.turns[0].tool_calls[0]
+    boundary_turn = episode.turns[1]
+    boundary_call = boundary_turn.tool_calls[0]
+
+    assert missing == ["call_31"]
+    assert resolved_call.result_received is True
+    assert boundary_call.result_received is False
+    assert boundary_turn.truncated is False
+    assert boundary_turn.info["max_steps_truncated_tool_call_ids"] == [
+        "call_31"
+    ]
+    assert boundary_turn.info["tool_call_commit_status"] == "uncommitted"
 
 
 def test_call_31_with_matching_tau_result_is_hydrated_normally() -> None:

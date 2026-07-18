@@ -277,78 +277,95 @@ def _hydrate_tool_results(
     termination_reason = simulation_run.get("termination_reason")
     final_turn = episode.turns[-1] if episode.turns else None
 
+    ordered_calls = [
+        (turn, call)
+        for turn in episode.turns
+        for call in turn.tool_calls
+    ]
+    recorded_call_ids = assistant_request_ids | set(results)
+    last_recorded_call_index = max(
+        (
+            index
+            for index, (_, call) in enumerate(ordered_calls)
+            if call.call_id in recorded_call_ids
+        ),
+        default=-1,
+    )
+
     seen_call_ids: set[str] = set()
     missing_call_ids: list[str] = []
     strict_missing_call_ids: list[str] = []
 
-    for turn in episode.turns:
-        for call in turn.tool_calls:
-            if call.call_id in seen_call_ids:
-                raise EpisodeDataError(
-                    f"trajectory contains duplicate tool call ID {call.call_id!r}"
-                )
+    for call_index, (turn, call) in enumerate(ordered_calls):
+        if call.call_id in seen_call_ids:
+            raise EpisodeDataError(
+                f"trajectory contains duplicate tool call ID {call.call_id!r}"
+            )
 
-            seen_call_ids.add(call.call_id)
-            tool_result = results.get(call.call_id)
+        seen_call_ids.add(call.call_id)
+        tool_result = results.get(call.call_id)
 
-            if call.is_control and call.name != TAU_STOP_TOOL_NAME:
-                raise EpisodeDataError(
-                    f"unsupported tau2 control tool {call.name!r}"
-                )
+        if call.is_control and call.name != TAU_STOP_TOOL_NAME:
+            raise EpisodeDataError(
+                f"unsupported tau2 control tool {call.name!r}"
+            )
 
-            if (
-                call.is_control
-                and tool_result is None
-                and termination_reason == "agent_stop"
-            ):
-                call.result = {"termination_reason": "agent_stop"}
-                call.error = None
-                call.result_received = True
-                continue
-
-            if tool_result is None:
-                missing_call_ids.append(call.call_id)
-
-                max_steps_tail_truncation = (
-                    termination_reason == "max_steps"
-                    and turn is final_turn
-                    and not call.is_control
-                )
-
-                if max_steps_tail_truncation:
-                    turn.truncated = True
-                    truncated_ids = turn.info.setdefault(
-                        "max_steps_truncated_tool_call_ids",
-                        [],
-                    )
-                    if call.call_id not in truncated_ids:
-                        truncated_ids.append(call.call_id)
-                    continue
-
-                terminal_unexecuted_agent_call = (
-                    termination_reason == "agent_error"
-                    and turn is final_turn
-                    and turn.done
-                    and not call.is_control
-                    and call.call_id in assistant_request_ids
-                )
-
-                if terminal_unexecuted_agent_call:
-                    unexecuted_ids = turn.info.setdefault(
-                        "terminal_unexecuted_tool_call_ids",
-                        [],
-                    )
-                    if call.call_id not in unexecuted_ids:
-                        unexecuted_ids.append(call.call_id)
-                    turn.info["terminal_unexecuted_reason"] = "agent_error"
-                    continue
-
-                strict_missing_call_ids.append(call.call_id)
-                continue
-
-            call.result = tool_result["result"]
-            call.error = tool_result["error"]
+        if (
+            call.is_control
+            and tool_result is None
+            and termination_reason == "agent_stop"
+        ):
+            call.result = {"termination_reason": "agent_stop"}
+            call.error = None
             call.result_received = True
+            continue
+
+        if tool_result is None:
+            missing_call_ids.append(call.call_id)
+
+            max_steps_uncommitted_tail = (
+                termination_reason == "max_steps"
+                and not call.is_control
+                and call.call_id not in recorded_call_ids
+                and call_index > last_recorded_call_index
+            )
+
+            if max_steps_uncommitted_tail:
+                if turn is final_turn:
+                    turn.truncated = True
+                truncated_ids = turn.info.setdefault(
+                    "max_steps_truncated_tool_call_ids",
+                    [],
+                )
+                if call.call_id not in truncated_ids:
+                    truncated_ids.append(call.call_id)
+                turn.info["tool_call_commit_status"] = "uncommitted"
+                continue
+
+            terminal_unexecuted_agent_call = (
+                termination_reason == "agent_error"
+                and turn is final_turn
+                and turn.done
+                and not call.is_control
+                and call.call_id in assistant_request_ids
+            )
+
+            if terminal_unexecuted_agent_call:
+                unexecuted_ids = turn.info.setdefault(
+                    "terminal_unexecuted_tool_call_ids",
+                    [],
+                )
+                if call.call_id not in unexecuted_ids:
+                    unexecuted_ids.append(call.call_id)
+                turn.info["terminal_unexecuted_reason"] = "agent_error"
+                continue
+
+            strict_missing_call_ids.append(call.call_id)
+            continue
+
+        call.result = tool_result["result"]
+        call.error = tool_result["error"]
+        call.result_received = True
 
     if strict and strict_missing_call_ids:
         missing = ", ".join(
