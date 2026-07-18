@@ -230,6 +230,42 @@ def _collect_tool_results(
     return results
 
 
+def _collect_assistant_tool_request_ids(
+    simulation_run: dict[str, Any],
+) -> set[str]:
+    """Collect tool-call IDs that tau2 recorded as assistant requests."""
+
+    messages = simulation_run.get("messages") or []
+
+    if not isinstance(messages, list):
+        raise EpisodeDataError("simulation_run.messages must be a list")
+
+    request_ids: set[str] = set()
+
+    for message in messages:
+        if not isinstance(message, dict):
+            raise EpisodeDataError("simulation_run contains a non-object message")
+
+        if message.get("role") != "assistant":
+            continue
+
+        tool_calls = message.get("tool_calls") or []
+        if not isinstance(tool_calls, list):
+            raise EpisodeDataError("assistant tool_calls must be a list")
+
+        for tool_call in tool_calls:
+            if not isinstance(tool_call, dict):
+                raise EpisodeDataError(
+                    "assistant tool_calls contains a non-object call"
+                )
+
+            call_id = tool_call.get("id")
+            if isinstance(call_id, str) and call_id.strip():
+                request_ids.add(call_id)
+
+    return request_ids
+
+
 def _hydrate_tool_results(
     episode: EpisodeRecord,
     simulation_run: dict[str, Any],
@@ -237,6 +273,7 @@ def _hydrate_tool_results(
     strict: bool,
 ) -> list[str]:
     results = _collect_tool_results(simulation_run)
+    assistant_request_ids = _collect_assistant_tool_request_ids(simulation_run)
     termination_reason = simulation_run.get("termination_reason")
     final_turn = episode.turns[-1] if episode.turns else None
 
@@ -288,6 +325,24 @@ def _hydrate_tool_results(
                         truncated_ids.append(call.call_id)
                     continue
 
+                terminal_unexecuted_agent_call = (
+                    termination_reason == "agent_error"
+                    and turn is final_turn
+                    and turn.done
+                    and not call.is_control
+                    and call.call_id in assistant_request_ids
+                )
+
+                if terminal_unexecuted_agent_call:
+                    unexecuted_ids = turn.info.setdefault(
+                        "terminal_unexecuted_tool_call_ids",
+                        [],
+                    )
+                    if call.call_id not in unexecuted_ids:
+                        unexecuted_ids.append(call.call_id)
+                    turn.info["terminal_unexecuted_reason"] = "agent_error"
+                    continue
+
                 strict_missing_call_ids.append(call.call_id)
                 continue
 
@@ -300,10 +355,14 @@ def _hydrate_tool_results(
             repr(call_id) for call_id in strict_missing_call_ids
         )
         raise EpisodeDataError(
-            f"tau2 returned no results for tool calls: {missing}"
+            f"tau2 returned no results for tool calls: {missing}; "
+            f"termination_reason={termination_reason!r}; "
+            f"assistant_request_ids={sorted(assistant_request_ids)!r}; "
+            f"tool_result_ids={sorted(results)!r}"
         )
 
     return missing_call_ids
+
 
 def _build_reward_record(transition: TauTransition) -> RewardRecord:
     reward_info = _decode_json_object(

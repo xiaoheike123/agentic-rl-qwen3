@@ -2,6 +2,7 @@ import pytest
 
 from agent_rl.data.schemas import EpisodeRecord, ToolCallRecord, TurnRecord
 from agent_rl.rewards.environment_checks import collect_tool_executions
+from agent_rl.rewards.process_reward import EnvironmentProcessReward
 from agent_rl.rollout.episode_worker import (
     EpisodeDataError,
     _collect_tool_results,
@@ -66,12 +67,175 @@ def test_done_control_call_requires_agent_stop() -> None:
 def test_missing_environment_tool_result_remains_an_error() -> None:
     episode = _episode_with_call(name="search", is_control=False)
 
-    with pytest.raises(EpisodeDataError, match="call_9"):
+    with pytest.raises(
+        EpisodeDataError,
+        match="termination_reason='agent_stop'",
+    ):
         _hydrate_tool_results(
             episode,
             {"termination_reason": "agent_stop", "messages": []},
             strict=True,
         )
+
+
+def test_agent_error_preserves_final_recorded_unexecuted_tool_call() -> None:
+    episode = _episode_with_call(name="create_task", is_control=False)
+    episode.turns[0].tool_calls[0].call_id = "call_31"
+
+    missing = _hydrate_tool_results(
+        episode,
+        {
+            "termination_reason": "agent_error",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "call_31",
+                            "name": "create_task",
+                            "arguments": {
+                                "title": "Important Meeting",
+                                "user_id": "user_1",
+                            },
+                        }
+                    ],
+                }
+            ],
+        },
+        strict=True,
+    )
+
+    turn = episode.turns[0]
+    call = turn.tool_calls[0]
+
+    assert missing == ["call_31"]
+    assert call.result_received is False
+    assert call.result is None
+    assert call.error is None
+    assert turn.truncated is False
+    assert turn.info["terminal_unexecuted_tool_call_ids"] == ["call_31"]
+    assert turn.info["terminal_unexecuted_reason"] == "agent_error"
+
+    executions = collect_tool_executions(episode)
+    assert len(executions) == 1
+    assert executions[0].call_id == "call_31"
+    assert executions[0].result_received is False
+
+    process = EnvironmentProcessReward().evaluate(episode)
+    missing_checks = [
+        check for check in process.checks
+        if check.name == "tool_result_received"
+    ]
+    assert process.total < 0.0
+    assert len(missing_checks) == 1
+    assert missing_checks[0].passed is False
+    assert missing_checks[0].evidence["call_id"] == "call_31"
+
+
+def test_agent_error_requires_request_to_exist_in_tau_history() -> None:
+    episode = _episode_with_call(name="create_task", is_control=False)
+    episode.turns[0].tool_calls[0].call_id = "call_31"
+
+    with pytest.raises(
+        EpisodeDataError,
+        match=r"assistant_request_ids=\[\]",
+    ):
+        _hydrate_tool_results(
+            episode,
+            {"termination_reason": "agent_error", "messages": []},
+            strict=True,
+        )
+
+
+def test_user_error_does_not_allow_missing_assistant_tool_result() -> None:
+    episode = _episode_with_call(name="create_task", is_control=False)
+    episode.turns[0].tool_calls[0].call_id = "call_31"
+
+    with pytest.raises(
+        EpisodeDataError,
+        match="termination_reason='user_error'",
+    ):
+        _hydrate_tool_results(
+            episode,
+            {
+                "termination_reason": "user_error",
+                "messages": [
+                    {
+                        "role": "assistant",
+                        "tool_calls": [
+                            {
+                                "id": "call_31",
+                                "name": "create_task",
+                                "arguments": {},
+                            }
+                        ],
+                    }
+                ],
+            },
+            strict=True,
+        )
+
+
+def test_agent_error_does_not_allow_missing_result_from_earlier_turn() -> None:
+    episode = EpisodeRecord(
+        episode_id="episode-1",
+        group_id="group-1",
+        domain="airline",
+        task_id="task-1",
+        model="Qwen3-8B",
+        turns=[
+            TurnRecord(
+                turn_index=0,
+                observation="first observation",
+                prompt_messages=[
+                    {"role": "user", "content": "first observation"}
+                ],
+                action="first_search",
+                next_observation="second observation",
+                tool_calls=[
+                    ToolCallRecord(
+                        call_id="call_1",
+                        name="first_search",
+                        is_control=False,
+                    )
+                ],
+            ),
+            TurnRecord(
+                turn_index=1,
+                observation="second observation",
+                prompt_messages=[
+                    {"role": "user", "content": "second observation"}
+                ],
+                action="final answer",
+                next_observation="",
+                terminated=True,
+            ),
+        ],
+    )
+
+    with pytest.raises(EpisodeDataError, match="call_1"):
+        _hydrate_tool_results(
+            episode,
+            {
+                "termination_reason": "agent_error",
+                "messages": [
+                    {
+                        "role": "assistant",
+                        "tool_calls": [
+                            {
+                                "id": "call_1",
+                                "name": "first_search",
+                                "arguments": {},
+                            }
+                        ],
+                    }
+                ],
+            },
+            strict=True,
+        )
+
+
 def test_max_steps_allows_missing_result_only_on_final_environment_turn() -> None:
     episode = _episode_with_call(name="search", is_control=False)
 
