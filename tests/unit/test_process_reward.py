@@ -319,3 +319,71 @@ def test_max_steps_receives_one_final_turn_penalty():
     assert sum(
         check.name == "abnormal_truncation" for check in result.checks
     ) == 1
+
+
+def test_uncommitted_max_steps_call_is_not_a_missing_result_error():
+    episode = EpisodeRecord(
+        episode_id="episode",
+        group_id="group",
+        domain="mock",
+        task_id="task",
+        model="model",
+    )
+    episode.append_turn(
+        TurnRecord(
+            turn_index=0,
+            observation="request",
+            prompt_messages=[{"role": "user", "content": "request"}],
+            action="tool()",
+            next_observation="",
+            tool_calls=[
+                ToolCallRecord(
+                    call_id="call_31",
+                    name="tool",
+                    arguments={"id": 31},
+                    result_received=False,
+                )
+            ],
+            info={
+                "max_steps_truncated_tool_call_ids": ["call_31"],
+                "tool_call_commit_status": "uncommitted",
+            },
+        )
+    )
+    episode.append_turn(
+        TurnRecord(
+            turn_index=1,
+            observation="budget exhausted",
+            prompt_messages=[
+                {"role": "user", "content": "budget exhausted"}
+            ],
+            action="budget exhausted",
+            next_observation="",
+            terminated=True,
+            truncated=True,
+        )
+    )
+    episode.finish(
+        reward=RewardRecord(outcome=0.0, total=0.0),
+        success=False,
+        termination_reason="max_steps",
+    )
+
+    result = EnvironmentProcessReward().evaluate(episode)
+
+    assert result.total == -1.0
+    assert result.turn_scores == (0.0, -1.0)
+    uncommitted = next(
+        check
+        for check in result.checks
+        if check.name == "tool_result_uncommitted"
+    )
+    assert uncommitted.score == 0.0
+    assert uncommitted.passed is False
+    assert uncommitted.evidence["commit_status"] == "uncommitted"
+    assert uncommitted.evidence["training_penalty_applied"] is False
+    assert not any(
+        check.name == "tool_result_received"
+        and check.evidence["call_id"] == "call_31"
+        for check in result.checks
+    )

@@ -102,7 +102,22 @@ class EnvironmentProcessReward:
                 )
 
         for execution in executions:
-            if not execution.result_received:
+            turn = episode.turns[execution.turn_index]
+            uncommitted_call_ids = turn.info.get(
+                "max_steps_truncated_tool_call_ids",
+                (),
+            )
+            is_uncommitted_boundary_call = (
+                episode.termination_reason == "max_steps"
+                and turn.info.get("tool_call_commit_status") == "uncommitted"
+                and execution.call_id in uncommitted_call_ids
+            )
+
+            if not execution.result_received and is_uncommitted_boundary_call:
+                score = 0.0
+                check_name = "tool_result_uncommitted"
+                passed = False
+            elif not execution.result_received:
                 score = -self.config.missing_result_penalty
                 check_name = "tool_result_received"
                 passed = False
@@ -126,6 +141,12 @@ class EnvironmentProcessReward:
                         "call_id": execution.call_id,
                         "tool": execution.name,
                         "error": execution.error,
+                        "commit_status": (
+                            "uncommitted"
+                            if is_uncommitted_boundary_call
+                            else "committed"
+                        ),
+                        "training_penalty_applied": score != 0.0,
                     },
                 )
             )
