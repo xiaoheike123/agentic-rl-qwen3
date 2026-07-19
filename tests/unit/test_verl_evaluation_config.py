@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from agent_rl.trainer import verl_entry
 from agent_rl.trainer.config_adapter import load_experiment_config
 from agent_rl.trainer.preflight import EVALUATION_MAX_STEPS, TRAIN_MAX_STEPS
@@ -36,6 +38,38 @@ def test_verl_subprocess_environment_preserves_other_modules(monkeypatch) -> Non
     assert environment["VERL_USE_EXTERNAL_MODULES"] == (
         "example.plugin,agent_rl.trainer.verl_algorithms"
     )
+
+
+def test_verl_subprocess_environment_resumes_explicit_swanlab_run(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("SWANLAB_RUN_ID", "existing-run")
+    monkeypatch.delenv("SWANLAB_RESUME", raising=False)
+
+    environment = verl_entry._verl_subprocess_environment()
+
+    assert environment["SWANLAB_RUN_ID"] == "existing-run"
+    assert environment["SWANLAB_RESUME"] == "must"
+
+
+def test_verl_subprocess_environment_rejects_conflicting_swanlab_mode(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("SWANLAB_RUN_ID", "existing-run")
+    monkeypatch.setenv("SWANLAB_RESUME", "never")
+
+    with pytest.raises(ValueError, match="cannot be combined"):
+        verl_entry._verl_subprocess_environment()
+
+
+def test_verl_subprocess_environment_requires_run_id_for_must(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("SWANLAB_RUN_ID", raising=False)
+    monkeypatch.setenv("SWANLAB_RESUME", "must")
+
+    with pytest.raises(ValueError, match="requires SWANLAB_RUN_ID"):
+        verl_entry._verl_subprocess_environment()
 
 
 def test_official_eval_uses_preexpanded_four_seed_rows(monkeypatch) -> None:

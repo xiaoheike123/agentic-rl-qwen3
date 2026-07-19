@@ -40,3 +40,7 @@ or official task contents are included.
   and therefore is not a result under the final protocol. Formal E0-E5 runs
   now use only the official tau2 airline train/test split. Synthetic, retail,
   and telecom utilities are retained for auxiliary analysis only.
+- Resuming a checkpoint with `SWANLAB_RUN_ID` but without `SWANLAB_RESUME`
+  made SwanLab reject the run before the first resumed step. The verl launcher
+  now selects `SWANLAB_RESUME=must` whenever an explicit run ID is supplied
+  and rejects contradictory resume settings before Ray starts.

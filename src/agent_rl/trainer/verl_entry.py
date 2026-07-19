@@ -16,6 +16,31 @@ from agent_rl.trainer.preflight import validate_experiment_config
 
 
 _VERL_ALGORITHMS_MODULE = "agent_rl.trainer.verl_algorithms"
+_SWANLAB_RESUME_MODES = {"allow", "must", "never"}
+
+
+def _configure_swanlab_resume(environment: dict[str, str]) -> None:
+    """Make SwanLab run resumption explicit when a run ID is supplied."""
+
+    run_id = environment.get("SWANLAB_RUN_ID", "").strip()
+    resume_mode = environment.get("SWANLAB_RESUME", "").strip().lower()
+    if resume_mode and resume_mode not in _SWANLAB_RESUME_MODES:
+        raise ValueError(
+            "SWANLAB_RESUME must be one of: allow, must, never"
+        )
+
+    if not run_id:
+        if resume_mode == "must":
+            raise ValueError("SWANLAB_RESUME=must requires SWANLAB_RUN_ID")
+        return
+
+    environment["SWANLAB_RUN_ID"] = run_id
+    if not resume_mode:
+        environment["SWANLAB_RESUME"] = "must"
+    elif resume_mode == "never":
+        raise ValueError(
+            "SWANLAB_RUN_ID cannot be combined with SWANLAB_RESUME=never"
+        )
 
 
 def _verl_subprocess_environment() -> dict[str, str]:
@@ -30,6 +55,7 @@ def _verl_subprocess_environment() -> dict[str, str]:
     if _VERL_ALGORITHMS_MODULE not in external_modules:
         external_modules.append(_VERL_ALGORITHMS_MODULE)
     environment["VERL_USE_EXTERNAL_MODULES"] = ",".join(external_modules)
+    _configure_swanlab_resume(environment)
     return environment
 
 
@@ -387,10 +413,19 @@ def main() -> None:
     print("Launching:")
     print(" ".join(command))
     if not args.dry_run:
+        environment = _verl_subprocess_environment()
+        swanlab_run_id = environment.get("SWANLAB_RUN_ID")
+        if swanlab_run_id:
+            print(
+                "SwanLab: resuming run "
+                f"{swanlab_run_id} ({environment['SWANLAB_RESUME']})"
+            )
+        else:
+            print("SwanLab: creating a new run")
         subprocess.run(
             command,
             check=True,
-            env=_verl_subprocess_environment(),
+            env=environment,
         )
 
 
