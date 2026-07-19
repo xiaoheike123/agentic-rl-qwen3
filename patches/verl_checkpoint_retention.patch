@@ -1,0 +1,19 @@
+diff --git a/verl/utils/checkpoint/fsdp_checkpoint_manager.py b/verl/utils/checkpoint/fsdp_checkpoint_manager.py
+index 38d22b5b..ad61edae 100644
+--- a/verl/utils/checkpoint/fsdp_checkpoint_manager.py
++++ b/verl/utils/checkpoint/fsdp_checkpoint_manager.py
+@@ -214,6 +214,14 @@ class FSDPCheckpointManager(BaseCheckpointManager):
+                     logger=logger,
+                 )
+ 
++        # Track a checkpoint loaded by this process so retention also works
++        # across restarts. The loaded checkpoint is removed only after the
++        # next checkpoint has been saved successfully.
++        if self.rank == 0 and not del_local_after_load:
++            loaded_path = os.path.abspath(local_path)
++            if loaded_path not in self.previous_saved_paths:
++                self.previous_saved_paths.append(loaded_path)
++
+         # wait for everyone to load checkpoints
+         torch.distributed.barrier()
+ 
