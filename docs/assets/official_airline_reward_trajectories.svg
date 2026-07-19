@@ -1,0 +1,164 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1160" height="640" viewBox="0 0 1160 640" role="img" aria-labelledby="title description">
+<title id="title">Training reward trajectories on official tau2 airline tasks</title>
+<desc id="description">Mean rollout reward by global training step for E1, E2, and E5.</desc>
+<rect width="100%" height="100%" fill="#FFFFFF"/>
+<style>
+text { font-family: Inter, "Segoe UI", Arial, sans-serif; fill: #20242C; letter-spacing: 0; }
+.title { font-size: 27px; font-weight: 650; }
+.subtitle { font-size: 14px; fill: #66707D; }
+.axis { font-size: 13px; fill: #68717E; }
+.axis-title { font-size: 14px; font-weight: 600; fill: #4D5663; }
+.legend { font-size: 13px; font-weight: 600; }
+</style>
+<text class="title" x="92" y="46">Training reward trajectories</text>
+<text class="subtitle" x="92" y="73">Official tau2 airline train tasks; mean over 120 rollouts per global step</text>
+<line x1="92" y1="101" x2="119" y2="101" stroke="#6D55B5" stroke-width="3" stroke-linecap="round"/>
+<circle cx="105.5" cy="101" r="3" fill="#6D55B5"/>
+<text class="legend" x="128" y="106">E1: sequence GRPO</text>
+<line x1="280.4" y1="101" x2="307.4" y2="101" stroke="#D85C85" stroke-width="3" stroke-linecap="round"/>
+<circle cx="293.9" cy="101" r="3" fill="#D85C85"/>
+<text class="legend" x="316.4" y="106">E2: balanced GRPO</text>
+<line x1="468.79999999999995" y1="101" x2="495.79999999999995" y2="101" stroke="#A35C3A" stroke-width="3" stroke-linecap="round"/>
+<circle cx="482.29999999999995" cy="101" r="3" fill="#A35C3A"/>
+<text class="legend" x="504.79999999999995" y="106">E5: balanced + process + hindsight</text>
+<line x1="92" y1="548.00" x2="1122" y2="548.00" stroke="#E6E9ED" stroke-width="1"/>
+<text class="axis" x="78" y="552.00" text-anchor="end">0.05</text>
+<line x1="92" y1="463.60" x2="1122" y2="463.60" stroke="#E6E9ED" stroke-width="1"/>
+<text class="axis" x="78" y="467.60" text-anchor="end">0.10</text>
+<line x1="92" y1="379.20" x2="1122" y2="379.20" stroke="#E6E9ED" stroke-width="1"/>
+<text class="axis" x="78" y="383.20" text-anchor="end">0.15</text>
+<line x1="92" y1="294.80" x2="1122" y2="294.80" stroke="#E6E9ED" stroke-width="1"/>
+<text class="axis" x="78" y="298.80" text-anchor="end">0.20</text>
+<line x1="92" y1="210.40" x2="1122" y2="210.40" stroke="#E6E9ED" stroke-width="1"/>
+<text class="axis" x="78" y="214.40" text-anchor="end">0.25</text>
+<line x1="92" y1="126.00" x2="1122" y2="126.00" stroke="#E6E9ED" stroke-width="1"/>
+<text class="axis" x="78" y="130.00" text-anchor="end">0.30</text>
+<line x1="92.00" y1="548" x2="92.00" y2="555" stroke="#A9B0B9" stroke-width="1"/>
+<text class="axis" x="92.00" y="576" text-anchor="middle">1</text>
+<line x1="213.18" y1="548" x2="213.18" y2="555" stroke="#A9B0B9" stroke-width="1"/>
+<text class="axis" x="213.18" y="576" text-anchor="middle">5</text>
+<line x1="364.65" y1="548" x2="364.65" y2="555" stroke="#A9B0B9" stroke-width="1"/>
+<text class="axis" x="364.65" y="576" text-anchor="middle">10</text>
+<line x1="516.12" y1="548" x2="516.12" y2="555" stroke="#A9B0B9" stroke-width="1"/>
+<text class="axis" x="516.12" y="576" text-anchor="middle">15</text>
+<line x1="667.59" y1="548" x2="667.59" y2="555" stroke="#A9B0B9" stroke-width="1"/>
+<text class="axis" x="667.59" y="576" text-anchor="middle">20</text>
+<line x1="819.06" y1="548" x2="819.06" y2="555" stroke="#A9B0B9" stroke-width="1"/>
+<text class="axis" x="819.06" y="576" text-anchor="middle">25</text>
+<line x1="970.53" y1="548" x2="970.53" y2="555" stroke="#A9B0B9" stroke-width="1"/>
+<text class="axis" x="970.53" y="576" text-anchor="middle">30</text>
+<line x1="1122.00" y1="548" x2="1122.00" y2="555" stroke="#A9B0B9" stroke-width="1"/>
+<text class="axis" x="1122.00" y="576" text-anchor="middle">35</text>
+<line x1="92" y1="126" x2="92" y2="548" stroke="#A9B0B9" stroke-width="1.2"/>
+<line x1="92" y1="548" x2="1122" y2="548" stroke="#A9B0B9" stroke-width="1.2"/>
+<text class="axis-title" x="607.00" y="603" text-anchor="middle">Global training step</text>
+<text class="axis-title" x="27" y="337" text-anchor="middle" transform="rotate(-90 27 337)">Mean rollout reward</text>
+<polyline points="92.00,407.33 122.29,351.07 152.59,379.20 182.88,379.20 213.18,365.13 243.47,337.00 273.76,337.00 304.06,379.20 334.35,252.60 364.65,308.87 394.94,351.07 425.24,365.13 455.53,379.20 485.82,294.80 516.12,280.73 546.41,337.00 576.71,308.87 607.00,280.73 637.29,393.27 667.59,252.60 697.88,238.53 728.18,308.87 758.47,266.67 788.76,280.73 819.06,351.07 849.35,337.00 879.65,238.53 909.94,280.73 940.24,294.80 970.53,252.60 1000.82,294.80 1031.12,252.60 1061.41,238.53 1091.71,337.00 1122.00,196.33" fill="none" stroke="#6D55B5" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="92.00" cy="407.33" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 1: 0.13333</title></circle>
+<circle cx="122.29" cy="351.07" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 2: 0.16667</title></circle>
+<circle cx="152.59" cy="379.20" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 3: 0.15000</title></circle>
+<circle cx="182.88" cy="379.20" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 4: 0.15000</title></circle>
+<circle cx="213.18" cy="365.13" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 5: 0.15833</title></circle>
+<circle cx="243.47" cy="337.00" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 6: 0.17500</title></circle>
+<circle cx="273.76" cy="337.00" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 7: 0.17500</title></circle>
+<circle cx="304.06" cy="379.20" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 8: 0.15000</title></circle>
+<circle cx="334.35" cy="252.60" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 9: 0.22500</title></circle>
+<circle cx="364.65" cy="308.87" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 10: 0.19167</title></circle>
+<circle cx="394.94" cy="351.07" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 11: 0.16667</title></circle>
+<circle cx="425.24" cy="365.13" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 12: 0.15833</title></circle>
+<circle cx="455.53" cy="379.20" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 13: 0.15000</title></circle>
+<circle cx="485.82" cy="294.80" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 14: 0.20000</title></circle>
+<circle cx="516.12" cy="280.73" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 15: 0.20833</title></circle>
+<circle cx="546.41" cy="337.00" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 16: 0.17500</title></circle>
+<circle cx="576.71" cy="308.87" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 17: 0.19167</title></circle>
+<circle cx="607.00" cy="280.73" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 18: 0.20833</title></circle>
+<circle cx="637.29" cy="393.27" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 19: 0.14167</title></circle>
+<circle cx="667.59" cy="252.60" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 20: 0.22500</title></circle>
+<circle cx="697.88" cy="238.53" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 21: 0.23333</title></circle>
+<circle cx="728.18" cy="308.87" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 22: 0.19167</title></circle>
+<circle cx="758.47" cy="266.67" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 23: 0.21667</title></circle>
+<circle cx="788.76" cy="280.73" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 24: 0.20833</title></circle>
+<circle cx="819.06" cy="351.07" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 25: 0.16667</title></circle>
+<circle cx="849.35" cy="337.00" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 26: 0.17500</title></circle>
+<circle cx="879.65" cy="238.53" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 27: 0.23333</title></circle>
+<circle cx="909.94" cy="280.73" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 28: 0.20833</title></circle>
+<circle cx="940.24" cy="294.80" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 29: 0.20000</title></circle>
+<circle cx="970.53" cy="252.60" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 30: 0.22500</title></circle>
+<circle cx="1000.82" cy="294.80" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 31: 0.20000</title></circle>
+<circle cx="1031.12" cy="252.60" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 32: 0.22500</title></circle>
+<circle cx="1061.41" cy="238.53" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 33: 0.23333</title></circle>
+<circle cx="1091.71" cy="337.00" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 34: 0.17500</title></circle>
+<circle cx="1122.00" cy="196.33" r="2.65" fill="#FFFFFF" stroke="#6D55B5" stroke-width="1.7"><title>E1 step 35: 0.25833</title></circle>
+<polyline points="92.00,351.07 122.29,393.27 152.59,379.20 182.88,407.33 213.18,365.13 243.47,407.33 273.76,322.93 304.06,393.27 334.35,393.27 364.65,393.27 394.94,365.13 425.24,365.13 455.53,337.00 485.82,280.73 516.12,435.47 546.41,379.20 576.71,322.93 607.00,351.07 637.29,393.27 667.59,337.00 697.88,379.20 728.18,280.73 758.47,337.00 788.76,294.80 819.06,308.87 849.35,351.07 879.65,308.87 909.94,252.60 940.24,308.87 970.53,322.93 1000.82,252.60 1031.12,337.00 1061.41,252.60 1091.71,280.73 1122.00,252.60" fill="none" stroke="#D85C85" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="92.00" cy="351.07" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 1: 0.16667</title></circle>
+<circle cx="122.29" cy="393.27" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 2: 0.14167</title></circle>
+<circle cx="152.59" cy="379.20" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 3: 0.15000</title></circle>
+<circle cx="182.88" cy="407.33" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 4: 0.13333</title></circle>
+<circle cx="213.18" cy="365.13" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 5: 0.15833</title></circle>
+<circle cx="243.47" cy="407.33" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 6: 0.13333</title></circle>
+<circle cx="273.76" cy="322.93" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 7: 0.18333</title></circle>
+<circle cx="304.06" cy="393.27" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 8: 0.14167</title></circle>
+<circle cx="334.35" cy="393.27" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 9: 0.14167</title></circle>
+<circle cx="364.65" cy="393.27" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 10: 0.14167</title></circle>
+<circle cx="394.94" cy="365.13" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 11: 0.15833</title></circle>
+<circle cx="425.24" cy="365.13" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 12: 0.15833</title></circle>
+<circle cx="455.53" cy="337.00" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 13: 0.17500</title></circle>
+<circle cx="485.82" cy="280.73" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 14: 0.20833</title></circle>
+<circle cx="516.12" cy="435.47" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 15: 0.11667</title></circle>
+<circle cx="546.41" cy="379.20" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 16: 0.15000</title></circle>
+<circle cx="576.71" cy="322.93" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 17: 0.18333</title></circle>
+<circle cx="607.00" cy="351.07" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 18: 0.16667</title></circle>
+<circle cx="637.29" cy="393.27" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 19: 0.14167</title></circle>
+<circle cx="667.59" cy="337.00" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 20: 0.17500</title></circle>
+<circle cx="697.88" cy="379.20" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 21: 0.15000</title></circle>
+<circle cx="728.18" cy="280.73" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 22: 0.20833</title></circle>
+<circle cx="758.47" cy="337.00" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 23: 0.17500</title></circle>
+<circle cx="788.76" cy="294.80" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 24: 0.20000</title></circle>
+<circle cx="819.06" cy="308.87" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 25: 0.19167</title></circle>
+<circle cx="849.35" cy="351.07" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 26: 0.16667</title></circle>
+<circle cx="879.65" cy="308.87" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 27: 0.19167</title></circle>
+<circle cx="909.94" cy="252.60" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 28: 0.22500</title></circle>
+<circle cx="940.24" cy="308.87" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 29: 0.19167</title></circle>
+<circle cx="970.53" cy="322.93" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 30: 0.18333</title></circle>
+<circle cx="1000.82" cy="252.60" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 31: 0.22500</title></circle>
+<circle cx="1031.12" cy="337.00" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 32: 0.17500</title></circle>
+<circle cx="1061.41" cy="252.60" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 33: 0.22500</title></circle>
+<circle cx="1091.71" cy="280.73" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 34: 0.20833</title></circle>
+<circle cx="1122.00" cy="252.60" r="2.65" fill="#FFFFFF" stroke="#D85C85" stroke-width="1.7"><title>E2 step 35: 0.22500</title></circle>
+<polyline points="92.00,397.49 122.29,395.03 152.59,494.55 182.88,397.49 213.18,483.65 243.47,392.21 273.76,445.31 304.06,434.06 334.35,425.62 364.65,438.98 394.94,459.73 425.24,377.09 455.53,393.97 485.82,404.87 516.12,401.71 546.41,343.33 576.71,429.14 607.00,454.46 637.29,381.31 667.59,348.96 697.88,396.43 728.18,360.56 758.47,332.08 788.76,437.58 819.06,377.79 849.35,313.44 879.65,363.38 909.94,347.20 940.24,338.41 970.53,354.23 1000.82,284.60 1031.12,383.77 1061.41,295.86 1091.71,377.09" fill="none" stroke="#A35C3A" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="92.00" cy="397.49" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 1: 0.13917</title></circle>
+<circle cx="122.29" cy="395.03" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 2: 0.14062</title></circle>
+<circle cx="152.59" cy="494.55" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 3: 0.08167</title></circle>
+<circle cx="182.88" cy="397.49" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 4: 0.13917</title></circle>
+<circle cx="213.18" cy="483.65" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 5: 0.08812</title></circle>
+<circle cx="243.47" cy="392.21" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 6: 0.14229</title></circle>
+<circle cx="273.76" cy="445.31" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 7: 0.11083</title></circle>
+<circle cx="304.06" cy="434.06" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 8: 0.11750</title></circle>
+<circle cx="334.35" cy="425.62" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 9: 0.12250</title></circle>
+<circle cx="364.65" cy="438.98" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 10: 0.11458</title></circle>
+<circle cx="394.94" cy="459.73" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 11: 0.10229</title></circle>
+<circle cx="425.24" cy="377.09" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 12: 0.15125</title></circle>
+<circle cx="455.53" cy="393.97" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 13: 0.14125</title></circle>
+<circle cx="485.82" cy="404.87" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 14: 0.13479</title></circle>
+<circle cx="516.12" cy="401.71" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 15: 0.13667</title></circle>
+<circle cx="546.41" cy="343.33" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 16: 0.17125</title></circle>
+<circle cx="576.71" cy="429.14" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 17: 0.12042</title></circle>
+<circle cx="607.00" cy="454.46" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 18: 0.10542</title></circle>
+<circle cx="637.29" cy="381.31" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 19: 0.14875</title></circle>
+<circle cx="667.59" cy="348.96" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 20: 0.16792</title></circle>
+<circle cx="697.88" cy="396.43" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 21: 0.13979</title></circle>
+<circle cx="728.18" cy="360.56" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 22: 0.16104</title></circle>
+<circle cx="758.47" cy="332.08" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 23: 0.17792</title></circle>
+<circle cx="788.76" cy="437.58" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 24: 0.11542</title></circle>
+<circle cx="819.06" cy="377.79" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 25: 0.15083</title></circle>
+<circle cx="849.35" cy="313.44" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 26: 0.18896</title></circle>
+<circle cx="879.65" cy="363.38" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 27: 0.15937</title></circle>
+<circle cx="909.94" cy="347.20" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 28: 0.16896</title></circle>
+<circle cx="940.24" cy="338.41" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 29: 0.17417</title></circle>
+<circle cx="970.53" cy="354.23" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 30: 0.16479</title></circle>
+<circle cx="1000.82" cy="284.60" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 31: 0.20604</title></circle>
+<circle cx="1031.12" cy="383.77" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 32: 0.14729</title></circle>
+<circle cx="1061.41" cy="295.86" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 33: 0.19937</title></circle>
+<circle cx="1091.71" cy="377.09" r="2.65" fill="#FFFFFF" stroke="#A35C3A" stroke-width="1.7"><title>E5 step 34: 0.15125</title></circle>
+<text class="subtitle" x="1122" y="626" text-anchor="end">E5 resumed segments merged by global step; raw values are not smoothed.</text>
+</svg>

@@ -39,6 +39,44 @@ E1, E2, and E5 are the formal comparison. E3 and E4 isolate the two E5
 components. Every trained experiment starts independently from the same base
 model; E2 and E5 are not initialized from E1.
 
+## Official airline results
+
+The following results are `Pass@1` on the locked official tau2 airline test
+set. Each experiment has two reported stochastic evaluation trials.
+
+![Official tau2 airline Pass@1](docs/assets/official_airline_pass1.svg)
+
+| Experiment | Trial 1 | Trial 2 | Two-trial mean |
+| --- | ---: | ---: | ---: |
+| E0 | 0.08674 | 0.08125 | 0.08400 |
+| E1 | 0.11250 | 0.12490 | 0.11870 |
+| E2 | 0.16250 | 0.15000 | 0.15625 |
+| E5 | 0.17500 | 0.16490 | 0.16995 |
+
+The two-run mean rises from `0.08400` for the frozen E0 baseline to `0.11870`
+for E1, `0.15625` for E2, and `0.16995` for E5. E5 is highest in both reported
+trials. With only two trials per experiment, these values support a descriptive
+comparison but not a statistical-significance claim.
+
+### Training reward trajectories
+
+The curves below are training diagnostics, not official evaluation scores. Each
+point is the mean scalar rollout reward over one `30 x 4 = 120` trajectory
+batch. E5's three resumed segments are joined by their persisted global step;
+the raw values are not smoothed. In these runs, `critic/score/mean` and
+`critic/rewards/mean` are identical, so the duplicate dashboard series is
+plotted only once.
+
+![Official tau2 airline training reward trajectories](docs/assets/official_airline_reward_trajectories.svg)
+
+The source values are kept in an
+[editable CSV](docs/results/official_airline_reward_trajectories.csv). After
+editing them, regenerate the SVG with:
+
+```bash
+python scripts/eval/plot_reward_trajectories.py
+```
+
 ### What changes in E2 and E5
 
 - **Sign-balanced aggregation** computes the positive- and negative-advantage
@@ -96,131 +134,3 @@ resumed after a restart, apply
 [`patches/verl_checkpoint_retention.patch`](patches/verl_checkpoint_retention.patch)
 to the pinned verl submodule so the previously loaded checkpoint is removed
 only after the next checkpoint is saved successfully.
-
-## Prepare locked datasets
-
-```bash
-python -m agent_rl.data.build_dataset \
-  --split train \
-  --output /root/autodl-tmp/agent-rl-data/official_airline/train.jsonl
-
-python -m agent_rl.data.build_dataset \
-  --split test \
-  --output /root/autodl-tmp/agent-rl-data/official_airline/test_4seed.jsonl
-
-wc -l /root/autodl-tmp/agent-rl-data/official_airline/*.jsonl
-# Expected: 30 train rows and 80 test rows.
-```
-
-These JSONL files contain task references, not hidden official task bodies.
-
-## Validate before training
-
-```bash
-python -m compileall -q src tests
-python -m pytest tests/unit tests/remote -q
-
-# Inspect the resolved verl command without starting a GPU run.
-python -m agent_rl.trainer.verl_entry \
-  --config configs/train/g4_preflight.yaml \
-  --dry-run
-
-# Eight train tasks x four trajectories, one optimizer step.
-bash scripts/train/train_experiment.sh configs/train/g4_preflight.yaml
-```
-
-Run the group diagnostic on the generated rollout before committing to a formal
-run:
-
-```bash
-bash scripts/eval/eval_g4_preflight.sh \
-  /root/autodl-tmp/agent-rl-outputs/g4_preflight/rollouts/1.jsonl
-```
-
-The full hardware and failure-recovery checklist is in
-[`docs/remote_validation_checklist.md`](docs/remote_validation_checklist.md).
-
-## Train
-
-```bash
-# Each command starts or resumes its own independent 75-step run.
-bash scripts/train/run_formal_phase.sh configs/train/e1_grpo_sequence.yaml
-bash scripts/train/run_formal_phase.sh configs/train/e2_grpo_balanced.yaml
-bash scripts/train/run_formal_phase.sh configs/train/e5_balanced_hindsight.yaml
-```
-
-Resolved outputs default to:
-
-```text
-/root/autodl-tmp/agent-rl-outputs/<experiment>/checkpoints/
-/root/autodl-tmp/agent-rl-outputs/<experiment>/rollouts/<step>.jsonl
-/root/autodl-tmp/agent-rl-logs/
-```
-
-Do not run two experiments against the same output directory. A failed run may
-leave an incomplete checkpoint; verify the actor files and
-`latest_checkpointed_iteration.txt` before resuming.
-
-## Export and evaluate
-
-Export a saved FSDP actor checkpoint, then audit the actual LoRA subdirectory:
-
-```bash
-bash scripts/train/export_lora.sh \
-  /root/autodl-tmp/agent-rl-outputs/e5/checkpoints/global_step_35/actor \
-  /root/autodl-tmp/agent-rl-artifacts/e5_step35_export
-
-python -m agent_rl.trainer.lora_audit \
-  /root/autodl-tmp/agent-rl-artifacts/e5_step35_export/lora_adapter
-```
-
-Run the frozen adapter on the 80-row official test grid:
-
-```bash
-AGENT_RL_LORA_ADAPTER_PATH=/root/autodl-tmp/agent-rl-artifacts/e5_step35_export/lora_adapter \
-  bash scripts/train/train_experiment.sh configs/train/final_lora_eval.yaml \
-  trainer.experiment_name=e5_step35_final
-
-bash scripts/eval/eval_official_airline.sh \
-  /root/autodl-tmp/agent-rl-outputs/e5_step35_final/validation/0.jsonl \
-  /root/autodl-tmp/agent-rl-outputs/e5_step35_final/report
-```
-
-The report command rejects incomplete or duplicated grids and writes
-`summary.json`, `tasks.csv`, and `trials.csv`. Primary metrics are success rate
-and tau2 `pass^1` through `pass^4`; turns, response tokens, tool errors, invalid
-actions, and max-turn rate are diagnostics.
-
-## Repository layout
-
-- `configs/`: locked data protocol, model, environment, rollout, reward, and
-  experiment manifests.
-- `src/agent_rl/data/`: official split validation and verl dataset export.
-- `src/agent_rl/envs/`: tau2 environment construction and action conversion.
-- `src/agent_rl/rollout/`: asynchronous tau2 agent loop, context compression,
-  and trajectory persistence.
-- `src/agent_rl/algorithms/`: GRPO advantage and loss aggregation utilities.
-- `src/agent_rl/rewards/`: outcome and deterministic process evidence.
-- `src/agent_rl/credit/`: hindsight turn-level credit assignment.
-- `src/agent_rl/trainer/`: verl command construction, adapters, and custom
-  estimators.
-- `src/agent_rl/eval/`: G=4 diagnostics and locked official evaluation.
-- `tests/`: unit and remote integration coverage.
-- `tau2-bench/`, `verl/`: pinned upstream submodules.
-
-Synthetic-data utilities remain available for auxiliary analysis, but no formal
-E0-E5 manifest imports synthetic tasks. Checkpoints, LoRA adapters, official
-task data, API keys, and downloaded experiment artifacts are intentionally not
-part of the repository.
-
-## Limitations
-
-This is a controlled single-domain, single-base-model study. E5's process and
-hindsight signals are hand-designed and may improve credit density or stability
-without outperforming standard GRPO. Claims should therefore be based on the
-locked multi-seed official evaluation, not training reward curves alone.
-
-Design rationale and known runtime issues are documented in
-[`docs/project_design.md`](docs/project_design.md),
-[`docs/reward_design.md`](docs/reward_design.md), and
-[`docs/issue_notes.md`](docs/issue_notes.md).
